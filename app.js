@@ -1,7 +1,7 @@
 /**
  * UFC FOSS Club — Recruitment Responses Dashboard
  * Real-Time Multi-Device Cloud Sync via Firebase Firestore + Offline Local Fallback
- * Horizontal Tiles, Select/Reject Decision Engine, Detail Modal Popup & CSV Export
+ * Horizontal Tiles, Select/Reject Decision Engine, Detail Modal Popup, Interviewer Notes & CSV Export
  */
 
 // Firebase Configuration (Project: ufc-recruitment-2026, Region: asia-south1)
@@ -24,6 +24,8 @@ const state = {
   filterStatus: 'ALL', // 'ALL' | 'SELECTED' | 'REJECTED' | 'PENDING'
   decisions: {}, // { [key]: 'selected' | 'rejected' }
   reviewers: {}, // { [key]: reviewerName }
+  notes: {}, // { [key]: candidateNote }
+  noteAuthors: {}, // { [key]: noteAuthorName }
   reviewerName: 'Reviewer',
   currentModalIndex: -1
 };
@@ -50,8 +52,7 @@ function initFirebase() {
 
       // Enable offline multi-tab persistence
       db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-        // Will warn if multiple tabs open simultaneously on cold boot; safe to continue
-        console.warn('Firestore persistence warning:', err.code);
+        console.warn('Firestore persistence notice:', err.code);
       });
 
       initFirestoreSync();
@@ -76,12 +77,24 @@ function initFirestoreSync() {
       if (change.type === 'removed') {
         delete state.decisions[key];
         delete state.reviewers[key];
+        delete state.notes[key];
+        delete state.noteAuthors[key];
       } else if (data) {
-        state.decisions[key] = data.decision;
-        if (data.reviewer) state.reviewers[key] = data.reviewer;
-        if (data.candidateId) {
-          state.decisions[data.candidateId] = data.decision;
-          if (data.reviewer) state.reviewers[data.candidateId] = data.reviewer;
+        if (data.decision !== undefined) {
+          state.decisions[key] = data.decision;
+          if (data.candidateId) state.decisions[data.candidateId] = data.decision;
+        }
+        if (data.reviewer) {
+          state.reviewers[key] = data.reviewer;
+          if (data.candidateId) state.reviewers[data.candidateId] = data.reviewer;
+        }
+        if (data.note !== undefined) {
+          state.notes[key] = data.note;
+          if (data.candidateId) state.notes[data.candidateId] = data.note;
+        }
+        if (data.noteAuthor) {
+          state.noteAuthors[key] = data.noteAuthor;
+          if (data.candidateId) state.noteAuthors[data.candidateId] = data.noteAuthor;
         }
       }
     });
@@ -91,9 +104,18 @@ function initFirestoreSync() {
     updateCounts();
     applyFilters();
 
-    // If modal is open, refresh its decision status badge
+    // If modal is open, refresh its decision status badge and notes (if not actively editing)
     if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
-      updateModalDecisionState(state.filtered[state.currentModalIndex]);
+      const active = state.filtered[state.currentModalIndex];
+      updateModalDecisionState(active);
+
+      const noteInput = document.getElementById('modal-note-input');
+      const noteAuthorEl = document.getElementById('modal-note-author');
+      if (noteInput && document.activeElement !== noteInput) {
+        noteInput.value = getCandidateNote(active);
+        const author = getCandidateNoteAuthor(active);
+        if (noteAuthorEl) noteAuthorEl.textContent = author && noteInput.value.trim() ? `(by ${author})` : '';
+      }
     }
 
     updateSyncIndicator('synced', 'Live Cloud Sync');
@@ -120,13 +142,17 @@ function updateSyncIndicator(status, text) {
 function loadLocalState() {
   try {
     const rawDecisions = localStorage.getItem('ufc_recruitment_decisions');
-    if (rawDecisions) {
-      state.decisions = JSON.parse(rawDecisions);
-    }
+    if (rawDecisions) state.decisions = JSON.parse(rawDecisions);
+
     const rawReviewers = localStorage.getItem('ufc_recruitment_reviewers');
-    if (rawReviewers) {
-      state.reviewers = JSON.parse(rawReviewers);
-    }
+    if (rawReviewers) state.reviewers = JSON.parse(rawReviewers);
+
+    const rawNotes = localStorage.getItem('ufc_recruitment_notes');
+    if (rawNotes) state.notes = JSON.parse(rawNotes);
+
+    const rawNoteAuthors = localStorage.getItem('ufc_recruitment_note_authors');
+    if (rawNoteAuthors) state.noteAuthors = JSON.parse(rawNoteAuthors);
+
     const savedTab = localStorage.getItem('ufc_recruitment_tab');
     if (savedTab && ['ALL', 'SELECTED', 'REJECTED', 'PENDING'].includes(savedTab)) {
       state.filterStatus = savedTab;
@@ -144,6 +170,8 @@ function saveLocalState() {
   try {
     localStorage.setItem('ufc_recruitment_decisions', JSON.stringify(state.decisions));
     localStorage.setItem('ufc_recruitment_reviewers', JSON.stringify(state.reviewers));
+    localStorage.setItem('ufc_recruitment_notes', JSON.stringify(state.notes));
+    localStorage.setItem('ufc_recruitment_note_authors', JSON.stringify(state.noteAuthors));
     localStorage.setItem('ufc_recruitment_tab', state.filterStatus);
     localStorage.setItem('ufc_reviewer_name', state.reviewerName);
   } catch (e) {
@@ -153,7 +181,7 @@ function saveLocalState() {
 
 /**
  * --------------------------------------------------------------------------
- * Candidate Key & Decision Resolvers
+ * Candidate Key, Decision & Notes Resolvers
  * --------------------------------------------------------------------------
  */
 function getCandidateKey(c) {
@@ -195,8 +223,34 @@ function getCandidateReviewer(c) {
   return '';
 }
 
+function getCandidateNote(c) {
+  if (!c) return '';
+  const key = getCandidateKey(c);
+  if (key && state.notes[key] !== undefined) return state.notes[key];
+  if (c.rollNo) {
+    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
+    if (state.notes[rollKey] !== undefined) return state.notes[rollKey];
+  }
+  if (state.notes[c.id] !== undefined) return state.notes[c.id];
+  if (state.notes[String(c.id)] !== undefined) return state.notes[String(c.id)];
+  return '';
+}
+
+function getCandidateNoteAuthor(c) {
+  if (!c) return '';
+  const key = getCandidateKey(c);
+  if (key && state.noteAuthors[key]) return state.noteAuthors[key];
+  if (c.rollNo) {
+    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
+    if (state.noteAuthors[rollKey]) return state.noteAuthors[rollKey];
+  }
+  if (state.noteAuthors[c.id]) return state.noteAuthors[c.id];
+  if (state.noteAuthors[String(c.id)]) return state.noteAuthors[String(c.id)];
+  return '';
+}
+
 /**
- * Update candidate decision: 'selected' | 'rejected' | toggle to null
+ * Update candidate decision: 'selected' | 'rejected' | toggle to pending
  * Synchronizes to Cloud Firestore and mirrors to local cache
  */
 async function setCandidateDecision(candidateId, decision) {
@@ -223,10 +277,18 @@ async function setCandidateDecision(candidateId, decision) {
 
     if (db) {
       updateSyncIndicator('syncing', 'Syncing…');
-      db.collection('decisions').doc(key).delete()
+      // Set decision to pending to keep any existing notes intact
+      db.collection('decisions').doc(key).set({
+        decision: 'pending',
+        reviewer: '',
+        candidateId: candidateId,
+        name: c.name || '',
+        rollNo: c.rollNo || '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true })
         .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
         .catch(err => {
-          console.error('Firestore delete error:', err);
+          console.error('Firestore decision update error:', err);
           updateSyncIndicator('error', 'Cloud sync error');
         });
     }
@@ -267,6 +329,79 @@ async function setCandidateDecision(candidateId, decision) {
     if (Number(active.id) === candidateId) {
       updateModalDecisionState(active);
     }
+  }
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * Feedback & Notes Auto-Save Handler
+ * --------------------------------------------------------------------------
+ */
+let noteDebounceTimer = null;
+
+function handleNoteInput(candidateId, noteText) {
+  const statusEl = document.getElementById('modal-note-status');
+  if (statusEl) {
+    statusEl.className = 'note-save-status saving';
+    statusEl.textContent = 'Saving…';
+  }
+
+  clearTimeout(noteDebounceTimer);
+  noteDebounceTimer = setTimeout(() => {
+    saveCandidateNote(candidateId, noteText);
+  }, 400);
+}
+
+async function saveCandidateNote(candidateId, noteText) {
+  clearTimeout(noteDebounceTimer);
+  candidateId = Number(candidateId);
+  const c = state.candidates.find(item => Number(item.id) === candidateId) || state.filtered.find(item => Number(item.id) === candidateId);
+  if (!c) return;
+
+  const key = getCandidateKey(c);
+  const reviewer = (state.reviewerName || 'Reviewer').trim();
+
+  state.notes[key] = noteText;
+  state.notes[candidateId] = noteText;
+  if (noteText.trim()) {
+    state.noteAuthors[key] = reviewer;
+    state.noteAuthors[candidateId] = reviewer;
+  }
+
+  saveLocalState();
+  applyFilters(); // Updates note preview on candidate tile
+
+  const statusEl = document.getElementById('modal-note-status');
+  const authorEl = document.getElementById('modal-note-author');
+  if (statusEl) {
+    statusEl.className = 'note-save-status saved';
+    statusEl.textContent = 'Saved ✓';
+  }
+  if (authorEl) {
+    authorEl.textContent = noteText.trim() ? `(by ${reviewer})` : '';
+  }
+
+  if (db) {
+    updateSyncIndicator('syncing', 'Syncing note…');
+    db.collection('decisions').doc(key).set({
+      note: noteText,
+      noteAuthor: noteText.trim() ? reviewer : '',
+      candidateId: candidateId,
+      name: c.name || '',
+      rollNo: c.rollNo || '',
+      branch: c.branch || '',
+      year: c.year || '',
+      noteUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true })
+      .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
+      .catch(err => {
+        console.error('Firestore note save error:', err);
+        updateSyncIndicator('error', 'Cloud sync error');
+        if (statusEl) {
+          statusEl.className = 'note-save-status';
+          statusEl.textContent = 'Offline (cached)';
+        }
+      });
   }
 }
 
@@ -476,7 +611,7 @@ function applyFilters() {
     if (statusFilter === 'REJECTED' && status !== 'rejected') return false;
     if (statusFilter === 'PENDING' && status !== 'pending') return false;
 
-    // Search query filter across all fields
+    // Search query filter across all fields including notes and feedback
     if (q) {
       const allText = [
         c.name,
@@ -491,7 +626,9 @@ function applyFilters() {
         c.contributions,
         c.admiredTool,
         c.whyJoin,
-        c.otherInfo
+        c.otherInfo,
+        getCandidateNote(c),
+        getCandidateNoteAuthor(c)
       ].join(' ').toLowerCase();
 
       if (!allText.includes(q)) return false;
@@ -524,12 +661,14 @@ function renderTiles() {
     const isContributor = (c.contributed || '').toLowerCase().startsWith('yes');
     const decision = getCandidateDecision(c);
     const reviewer = getCandidateReviewer(c);
+    const note = getCandidateNote(c);
+    const noteAuthor = getCandidateNoteAuthor(c);
 
     const cleanDigits = (c.phone || '').replace(/[^0-9]/g, '');
     const waPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
 
     // Tech stack preview (compact for scannability)
-    const techPreview = c.techStack ? c.techStack.replace(/[\r\n]+/g, ' ').slice(0, 95) : 'None specified';
+    const techPreview = c.techStack ? c.techStack.replace(/[\r\n]+/g, ' ').slice(0, 85) : 'None specified';
 
     let tileClass = 'tile';
     if (decision === 'selected') tileClass += ' is-selected';
@@ -574,11 +713,17 @@ function renderTiles() {
           </div>
         </div>
 
-        <!-- Secondary Row: Tech Stack & View Indicator -->
+        <!-- Secondary Row: Tech Stack, Feedback Preview & View Indicator -->
         <div class="tile-sub-row">
           <div class="tile-tech-preview">
-            <strong>Tech Stack:</strong> ${highlight(techPreview, q)}${c.techStack && c.techStack.length > 95 ? '…' : ''}
+            <strong>Tech Stack:</strong> ${highlight(techPreview, q)}${c.techStack && c.techStack.length > 85 ? '…' : ''}
           </div>
+          ${note ? `
+            <div class="tile-note-preview" title="Note by ${escapeHtml(noteAuthor || 'Reviewer')}: ${escapeHtml(note)}">
+              <span class="note-icon">📝</span>
+              <span><strong>${escapeHtml(noteAuthor ? noteAuthor + ': ' : 'Note: ')}</strong>${highlight(note.length > 60 ? note.slice(0, 60) + '…' : note, q)}</span>
+            </div>
+          ` : ''}
           <div class="tile-view-prompt">
             View Details &amp; Answers &rarr;
           </div>
@@ -647,6 +792,22 @@ function openCandidateModal(index) {
     ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>` : '<span class="unanswered">No Portfolio</span>'}
   `;
 
+  // Populate Interviewer Notes & Feedback
+  const noteInput = document.getElementById('modal-note-input');
+  const noteAuthorEl = document.getElementById('modal-note-author');
+  const noteStatusEl = document.getElementById('modal-note-status');
+  if (noteInput) {
+    noteInput.value = getCandidateNote(c);
+    const author = getCandidateNoteAuthor(c);
+    if (noteAuthorEl) {
+      noteAuthorEl.textContent = author && noteInput.value.trim() ? `(by ${author})` : '';
+    }
+    if (noteStatusEl) {
+      noteStatusEl.className = 'note-save-status saved';
+      noteStatusEl.textContent = 'Saved';
+    }
+  }
+
   // All 8 Actual Questions
   const fieldsEl = document.getElementById('modal-fields');
   fieldsEl.innerHTML = `
@@ -697,6 +858,15 @@ function updateModalDecisionState(candidate) {
 }
 
 function closeModal() {
+  // Ensure any active note typing is flushed before closing
+  if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+    const active = state.filtered[state.currentModalIndex];
+    const noteInput = document.getElementById('modal-note-input');
+    if (noteInput && noteInput.value !== getCandidateNote(active)) {
+      saveCandidateNote(active.id, noteInput.value);
+    }
+  }
+
   document.getElementById('modal-backdrop').classList.add('hidden');
   state.currentModalIndex = -1;
 }
@@ -778,7 +948,10 @@ function exportSelectedToCSV() {
     'Roll Number',
     'Branch',
     'Year',
+    'Decision',
     'Selected By (Reviewer)',
+    'Interviewer Notes & Feedback',
+    'Notes Author',
     'WhatsApp / Contact',
     'Email',
     'GitHub URL',
@@ -806,7 +979,10 @@ function exportSelectedToCSV() {
       c.rollNo,
       c.branch,
       c.year,
+      'Selected',
       getCandidateReviewer(c) || 'Reviewer',
+      getCandidateNote(c) || '',
+      getCandidateNoteAuthor(c) || '',
       c.phone,
       c.email,
       c.github,
@@ -865,6 +1041,7 @@ function bindEvents() {
   const exportBtn = document.getElementById('export-selected-btn');
   const reviewerInput = document.getElementById('reviewer-name-input');
   const resetBtn = document.getElementById('reset-decisions-btn');
+  const noteInput = document.getElementById('modal-note-input');
 
   // Reviewer Name Input
   if (reviewerInput) {
@@ -875,6 +1052,23 @@ function bindEvents() {
       const val = e.target.value.trim();
       state.reviewerName = val || 'Reviewer';
       saveLocalState();
+    });
+  }
+
+  // Interviewer Notes & Feedback Input
+  if (noteInput) {
+    noteInput.addEventListener('input', (e) => {
+      if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        const c = state.filtered[state.currentModalIndex];
+        handleNoteInput(c.id, e.target.value);
+      }
+    });
+
+    noteInput.addEventListener('blur', (e) => {
+      if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        const c = state.filtered[state.currentModalIndex];
+        saveCandidateNote(c.id, e.target.value);
+      }
     });
   }
 
@@ -918,21 +1112,27 @@ function bindEvents() {
     });
   });
 
-  // Reset Decisions (Cloud + Local)
+  // Reset Decisions & Notes (Cloud + Local)
   if (resetBtn) {
     resetBtn.addEventListener('click', async () => {
-      const ok = confirm('Are you sure you want to reset all decisions from the Cloud Database and local cache? This will clear selections for all team members.');
+      const ok = confirm('Are you sure you want to reset all decisions and notes from Cloud DB and local cache? This will clear records for all interviewers.');
       if (!ok) return;
 
       updateSyncIndicator('syncing', 'Resetting…');
       state.decisions = {};
       state.reviewers = {};
+      state.notes = {};
+      state.noteAuthors = {};
       saveLocalState();
       updateCounts();
       applyFilters();
 
       if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
         updateModalDecisionState(state.filtered[state.currentModalIndex]);
+        const nInput = document.getElementById('modal-note-input');
+        if (nInput) nInput.value = '';
+        const authorEl = document.getElementById('modal-note-author');
+        if (authorEl) authorEl.textContent = '';
       }
 
       if (db) {
@@ -942,11 +1142,11 @@ function bindEvents() {
           snapshot.forEach(doc => batch.delete(doc.ref));
           await batch.commit();
           updateSyncIndicator('synced', 'Live Cloud Sync');
-          showToast('All candidate decisions reset across cloud');
+          showToast('All candidate decisions and notes reset across cloud');
         } catch (err) {
           console.error('Reset error:', err);
           updateSyncIndicator('error', 'Reset failed on Cloud');
-          showToast('Failed to reset cloud decisions');
+          showToast('Failed to reset cloud records');
         }
       } else {
         showToast('All decisions reset locally');
@@ -1019,6 +1219,10 @@ function bindEvents() {
 
   if (modalPrevBtn) {
     modalPrevBtn.addEventListener('click', () => {
+      // Flush note before changing candidate
+      if (noteInput && state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        saveCandidateNote(state.filtered[state.currentModalIndex].id, noteInput.value);
+      }
       if (state.currentModalIndex > 0) {
         openCandidateModal(state.currentModalIndex - 1);
       }
@@ -1027,6 +1231,10 @@ function bindEvents() {
 
   if (modalNextBtn) {
     modalNextBtn.addEventListener('click', () => {
+      // Flush note before changing candidate
+      if (noteInput && state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        saveCandidateNote(state.filtered[state.currentModalIndex].id, noteInput.value);
+      }
       if (state.currentModalIndex < state.filtered.length - 1) {
         openCandidateModal(state.currentModalIndex + 1);
       }
@@ -1056,6 +1264,14 @@ function bindEvents() {
     const isModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
 
     if (isModalOpen) {
+      // If actively typing inside the notes textarea, don't capture arrows or escape
+      if (document.activeElement === noteInput) {
+        if (e.key === 'Escape') {
+          noteInput.blur();
+        }
+        return;
+      }
+
       if (e.key === 'Escape') {
         closeModal();
       } else if (e.key === 'ArrowLeft') {
@@ -1068,7 +1284,7 @@ function bindEvents() {
         }
       }
     } else {
-      if (e.key === '/' && document.activeElement !== searchInput) {
+      if (e.key === '/' && document.activeElement !== searchInput && document.activeElement !== reviewerInput) {
         e.preventDefault();
         if (searchInput) {
           searchInput.focus();

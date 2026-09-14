@@ -644,6 +644,32 @@ body {
   font-weight: 500;
 }
 
+.tile-note-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.73rem;
+  color: #e4e4e7;
+  background: #111111;
+  border: 1px solid var(--line-strong);
+  padding: 0.2rem 0.55rem;
+  border-radius: 3px;
+  max-width: 480px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile-note-preview .note-icon {
+  font-size: 0.78rem;
+}
+
+.tile-note-preview strong {
+  color: var(--green);
+  font-weight: 600;
+}
+
 .tile-view-prompt {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -794,6 +820,99 @@ mark.match {
 }
 .modal-links a.link-wa:hover {
   border-bottom-color: var(--green);
+}
+
+/* Modal Interviewer Notes & Feedback Section */
+.modal-notes-section {
+  background: #090909;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--green);
+  border-radius: 4px;
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  transition: border-color 0.15s;
+}
+
+.modal-notes-section:focus-within {
+  border-color: var(--line-strong);
+  border-left-color: var(--green);
+}
+
+.modal-notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.notes-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: #f3f4f6;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.notes-icon {
+  font-size: 0.85rem;
+}
+
+.note-author-tag {
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  font-weight: 400;
+  text-transform: none;
+}
+
+.note-save-status {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: color 0.2s ease;
+}
+
+.note-save-status.saving {
+  color: #fbbf24;
+}
+
+.note-save-status.saved {
+  color: var(--green);
+}
+
+.modal-note-textarea {
+  width: 100%;
+  background: #050505;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.65rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 75px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.modal-note-textarea:focus {
+  background: #080808;
+  border-color: var(--green-border);
+}
+
+.modal-note-textarea::placeholder {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }
 
 .modal-fields {
