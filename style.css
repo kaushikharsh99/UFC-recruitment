@@ -16,6 +16,8 @@
   --bg-card-hover: #131313;
   --bg-input: #0a0a0a;
   --bg-modal: #0a0a0a;
+  --bg-subtle: #080808;
+  --bg-badge: #141414;
 
   /* Soothing, eye-friendly emerald green (non-neon) */
   --green: #10b981;
@@ -36,8 +38,42 @@
   --ink-dim: #9ca3af;
   --ink-faint: #52525b;
 
+  --modal-backdrop: rgba(0, 0, 0, 0.82);
+  --modal-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+  --selection-color: #000000;
+
   --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'IBM Plex Mono', monospace;
+}
+
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-input: #ffffff;
+  --bg-modal: #ffffff;
+  --bg-subtle: #f8fafc;
+  --bg-badge: #f1f5f9;
+
+  --green: #059669;
+  --green-hover: #047857;
+  --green-subtle: rgba(5, 150, 105, 0.08);
+  --green-border: rgba(5, 150, 105, 0.35);
+
+  --red: #dc2626;
+  --red-hover: #b91c1c;
+  --red-subtle: rgba(220, 38, 38, 0.08);
+  --red-border: rgba(220, 38, 38, 0.35);
+
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+  --ink: #0f172a;
+  --ink-dim: #475569;
+  --ink-faint: #94a3b8;
+
+  --modal-backdrop: rgba(15, 23, 42, 0.6);
+  --modal-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
+  --selection-color: #ffffff;
 }
 
 body {
@@ -201,7 +237,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #0b0b0b;
+  background: var(--bg-card);
   border: 1px solid var(--line);
   padding: 0.3rem 0.6rem;
   border-radius: 4px;
@@ -217,7 +253,7 @@ body {
 .reviewer-input {
   background: transparent;
   border: none;
-  color: #ffffff;
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 500;
@@ -246,10 +282,37 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  background: var(--bg-card);
+  color: var(--ink);
+}
+
+.btn-action:hover {
+  border-color: var(--line-strong);
+}
+
+/* Theme Toggle Button */
+.btn-theme {
+  color: var(--ink-dim);
+}
+.btn-theme:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+/* Live Form Sync Button */
+.btn-sync-form {
+  background: var(--green-subtle);
+  border-color: var(--green-border);
+  color: var(--green);
+}
+.btn-sync-form:hover {
+  background: var(--green);
+  color: var(--selection-color);
+  font-weight: 600;
+  border-color: var(--green);
 }
 
 .btn-reset {
-  background: #0c0c0c;
   color: var(--ink-dim);
 }
 .btn-reset:hover {
@@ -265,13 +328,12 @@ body {
 }
 .btn-export:hover {
   background: var(--green);
-  color: #000000;
+  color: var(--selection-color);
   border-color: var(--green);
   font-weight: 600;
 }
 
 .btn-import {
-  background: #0c0c0c;
   color: var(--ink-dim);
 }
 .btn-import:hover {
@@ -290,7 +352,7 @@ body {
 }
 
 .tab-btn {
-  background: #0a0a0a;
+  background: var(--bg-card);
   border: 1px solid var(--line);
   color: var(--ink-dim);
   font-family: var(--font-mono);
@@ -310,9 +372,9 @@ body {
 }
 
 .tab-btn.active {
-  background: #141414;
-  border-color: var(--ink-dim);
-  color: #ffffff;
+  background: var(--bg-badge);
+  border-color: var(--line-strong);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -696,7 +758,7 @@ mark.match {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.88);
+  background: var(--modal-backdrop);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -713,7 +775,7 @@ mark.match {
 .modal-window {
   background: var(--bg-modal);
   border: 1px solid var(--line-strong);
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+  box-shadow: var(--modal-shadow);
   border-radius: 8px;
   width: 100%;
   max-width: 860px;
@@ -722,6 +784,10 @@ mark.match {
   flex-direction: column;
   overflow: hidden;
   animation: modalScaleUp 0.16s ease-out;
+}
+
+.modal-window-small {
+  max-width: 580px;
 }
 
 @keyframes modalScaleUp {
@@ -737,7 +803,7 @@ mark.match {
   gap: 1rem;
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--line);
-  background: #080808;
+  background: var(--bg-subtle);
 }
 
 .modal-head-info {
@@ -794,7 +860,7 @@ mark.match {
   gap: 1.1rem;
   flex-wrap: wrap;
   padding: 0.65rem 0.9rem;
-  background: #060606;
+  background: var(--bg-subtle);
   border: 1px solid var(--line);
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -824,7 +890,7 @@ mark.match {
 
 /* Modal Interviewer Notes & Feedback Section */
 .modal-notes-section {
-  background: #090909;
+  background: var(--bg-subtle);
   border: 1px solid var(--line);
   border-left: 3px solid var(--green);
   border-radius: 4px;
@@ -853,7 +919,7 @@ mark.match {
   gap: 0.45rem;
   font-family: var(--font-mono);
   font-size: 0.74rem;
-  color: #f3f4f6;
+  color: var(--ink);
   letter-spacing: 0.02em;
   text-transform: uppercase;
   font-weight: 600;
@@ -890,7 +956,7 @@ mark.match {
 
 .modal-note-textarea {
   width: 100%;
-  background: #050505;
+  background: var(--bg-input);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 0.65rem 0.85rem;
@@ -905,7 +971,7 @@ mark.match {
 }
 
 .modal-note-textarea:focus {
-  background: #080808;
+  background: var(--bg-card);
   border-color: var(--green-border);
 }
 
@@ -923,7 +989,7 @@ mark.match {
 
 /* Form Question Boxes inside Modal */
 .field {
-  background: #080808;
+  background: var(--bg-subtle);
   border: 1px solid var(--line);
   border-left: 2px solid var(--green);
   padding: 0.75rem 1rem;
@@ -948,7 +1014,7 @@ mark.match {
 
 .field-text {
   font-size: 0.94rem;
-  color: #f3f4f6;
+  color: var(--ink);
   line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
@@ -957,7 +1023,7 @@ mark.match {
 .field-text.mono {
   font-family: var(--font-mono);
   font-size: 0.88rem;
-  color: #e5e7eb;
+  color: var(--ink);
 }
 
 .field-text.is-empty,
@@ -965,6 +1031,48 @@ mark.match {
   color: var(--ink-faint);
   font-family: var(--font-mono);
   font-size: 0.85rem;
+}
+
+/* Google Sheet Connect Modal Styles */
+.sheet-url-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0.65rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.sheet-url-input:focus {
+  border-color: var(--green);
+}
+
+.sheet-guide-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ink-dim);
+}
+
+.guide-title {
+  color: var(--ink);
+  margin-bottom: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+}
+
+.guide-list {
+  margin-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 /* Modal Footer */
@@ -975,7 +1083,7 @@ mark.match {
   gap: 1rem;
   padding: 1rem 1.5rem;
   border-top: 1px solid var(--line);
-  background: #080808;
+  background: var(--bg-subtle);
   flex-wrap: wrap;
 }
 
@@ -986,7 +1094,7 @@ mark.match {
 }
 
 .btn-nav {
-  background: #050505;
+  background: var(--bg-card);
   border: 1px solid var(--line);
   color: var(--ink-dim);
   font-family: var(--font-mono);

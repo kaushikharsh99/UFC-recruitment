@@ -32,6 +32,12 @@
           <span class="reviewer-label">Reviewer:</span>
           <input type="text" id="reviewer-name-input" class="reviewer-input" placeholder="Your Name" maxlength="20" spellcheck="false">
         </div>
+        <button id="theme-toggle-btn" class="btn-action btn-theme" title="Toggle Light / Dark mode">
+          <span id="theme-icon">☀️</span> <span id="theme-text">Light</span>
+        </button>
+        <button id="sync-sheet-btn" class="btn-action btn-sync-form" title="Import live responses from linked Google Form / Sheet">
+          ↻ Sync Form
+        </button>
         <button id="reset-decisions-btn" class="btn-action btn-reset hidden" title="Clear all saved selections and rejections across cloud and local">
           Reset All
         </button>
@@ -112,7 +118,12 @@
           <!-- WhatsApp, Email, GitHub, Portfolio -->
         </div>
 
-        <!-- Interviewer Feedback & Notes Box -->
+        <!-- All Questions -->
+        <div class="modal-fields" id="modal-fields">
+          <!-- Form question boxes injected by JS -->
+        </div>
+
+        <!-- Interviewer Feedback & Notes Box (At bottom of candidate details) -->
         <div class="modal-notes-section">
           <div class="modal-notes-header">
             <div class="notes-header-title">
@@ -129,11 +140,6 @@
             rows="3"
             spellcheck="false"
           ></textarea>
-        </div>
-
-        <!-- All Questions -->
-        <div class="modal-fields" id="modal-fields">
-          <!-- Form question boxes injected by JS -->
         </div>
       </div>
 
@@ -152,6 +158,40 @@
             ✓ Select
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Sheet Live Sync Connection Modal -->
+  <div id="sheet-modal-backdrop" class="modal-backdrop hidden" tabindex="-1">
+    <div class="modal-window modal-window-small">
+      <div class="modal-header">
+        <h3 class="modal-name" style="font-size: 1.15rem;">Connect Live Google Form Responses</h3>
+        <button id="sheet-modal-close" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" style="gap: 0.9rem;">
+        <p style="font-size: 0.85rem; color: var(--ink-dim); line-height: 1.5;">
+          Paste your Google Form responses <strong>Google Sheet URL</strong> or <strong>Published CSV Link</strong> to automatically import candidates whenever new responses are submitted:
+        </p>
+        <input
+          type="url"
+          id="sheet-url-input"
+          class="sheet-url-input"
+          placeholder="https://docs.google.com/spreadsheets/d/.../edit or published CSV URL"
+          spellcheck="false"
+        >
+        <div class="sheet-guide-box">
+          <p class="guide-title"><strong>📌 How to connect your Google Form in 3 quick steps:</strong></p>
+          <ol class="guide-list">
+            <li>In your <strong>Google Form</strong>, go to the <strong>Responses</strong> tab and click <strong>Link to Sheets</strong> (creates a connected Google Sheet).</li>
+            <li>In that Google Sheet, click <strong>File</strong> &rarr; <strong>Share</strong> &rarr; <strong>Publish to web</strong>.</li>
+            <li>Under Link, choose <strong>Comma-separated values (.csv)</strong>, click <strong>Publish</strong>, and paste the link above! (Or make sheet viewable to anyone with link and paste standard sheet URL).</li>
+          </ol>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 0.75rem;">
+        <button id="sheet-cancel-btn" class="btn-action">Cancel</button>
+        <button id="sheet-save-btn" class="btn-action btn-export">Connect &amp; Sync Now</button>
       </div>
     </div>
   </div>

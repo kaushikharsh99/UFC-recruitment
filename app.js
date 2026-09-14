@@ -1,6 +1,7 @@
 /**
  * UFC FOSS Club — Recruitment Responses Dashboard
  * Real-Time Multi-Device Cloud Sync via Firebase Firestore + Offline Local Fallback
+ * Live Google Sheet / Form Response Importer + Light/Dark Theme Switcher
  * Horizontal Tiles, Select/Reject Decision Engine, Detail Modal Popup, Interviewer Notes & CSV Export
  */
 
@@ -27,15 +28,53 @@ const state = {
   notes: {}, // { [key]: candidateNote }
   noteAuthors: {}, // { [key]: noteAuthorName }
   reviewerName: 'Reviewer',
+  theme: 'dark', // 'dark' | 'light'
+  sheetUrl: '',
   currentModalIndex: -1
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
+  initTheme();
   initData();
   bindEvents();
   initFirebase();
 });
+
+/**
+ * --------------------------------------------------------------------------
+ * Theme Management (Light / Dark Mode)
+ * --------------------------------------------------------------------------
+ */
+function initTheme() {
+  setTheme(state.theme);
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  const icon = document.getElementById('theme-icon');
+  const text = document.getElementById('theme-text');
+
+  if (theme === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    if (icon) icon.textContent = '🌙';
+    if (text) text.textContent = 'Dark';
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+    if (icon) icon.textContent = '☀️';
+    if (text) text.textContent = 'Light';
+  }
+
+  try {
+    localStorage.setItem('ufc_theme', theme);
+  } catch (e) {}
+}
+
+function toggleTheme() {
+  const next = state.theme === 'light' ? 'dark' : 'light';
+  setTheme(next);
+  showToast(`Switched to ${next === 'light' ? 'Light ☀️' : 'Dark 🌙'} mode`);
+}
 
 /**
  * --------------------------------------------------------------------------
@@ -161,6 +200,14 @@ function loadLocalState() {
     if (savedReviewer && savedReviewer.trim()) {
       state.reviewerName = savedReviewer.trim();
     }
+    const savedTheme = localStorage.getItem('ufc_theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      state.theme = savedTheme;
+    }
+    const savedSheetUrl = localStorage.getItem('ufc_sheet_url');
+    if (savedSheetUrl) {
+      state.sheetUrl = savedSheetUrl;
+    }
   } catch (e) {
     console.error('Error loading localStorage cache:', e);
   }
@@ -174,6 +221,8 @@ function saveLocalState() {
     localStorage.setItem('ufc_recruitment_note_authors', JSON.stringify(state.noteAuthors));
     localStorage.setItem('ufc_recruitment_tab', state.filterStatus);
     localStorage.setItem('ufc_reviewer_name', state.reviewerName);
+    localStorage.setItem('ufc_theme', state.theme);
+    localStorage.setItem('ufc_sheet_url', state.sheetUrl);
   } catch (e) {
     console.error('Error saving localStorage cache:', e);
   }
@@ -277,7 +326,6 @@ async function setCandidateDecision(candidateId, decision) {
 
     if (db) {
       updateSyncIndicator('syncing', 'Syncing…');
-      // Set decision to pending to keep any existing notes intact
       db.collection('decisions').doc(key).set({
         decision: 'pending',
         reviewer: '',
@@ -407,11 +455,93 @@ async function saveCandidateNote(candidateId, noteText) {
 
 /**
  * --------------------------------------------------------------------------
+ * Google Sheets / Forms Live Synchronization
+ * --------------------------------------------------------------------------
+ */
+function getGoogleSheetCSVUrl(url) {
+  if (!url) return '';
+  url = url.trim();
+  if (url.includes('pub?output=csv') || url.includes('/pub?output=csv') || url.endsWith('.csv')) {
+    return url;
+  }
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv`;
+  }
+  return url;
+}
+
+async function syncGoogleSheetResponses(forceModal = false) {
+  if (forceModal || !state.sheetUrl) {
+    openSheetModal();
+    return;
+  }
+
+  const csvUrl = getGoogleSheetCSVUrl(state.sheetUrl);
+  showToast('↻ Connecting to live Google Sheet responses…');
+
+  const syncBtn = document.getElementById('sync-sheet-btn');
+  if (syncBtn) syncBtn.textContent = '↻ Syncing…';
+
+  try {
+    const res = await fetch(csvUrl);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}: Check that the sheet is shared or published`);
+    }
+    const csvText = await res.text();
+    const rows = parseCSV(csvText);
+    const parsed = mapCSV(rows);
+
+    if (parsed.length > 0) {
+      const oldCount = state.candidates.length;
+      state.candidates = parsed;
+      applyFilters();
+      updateCounts();
+
+      const newCount = Math.max(0, parsed.length - oldCount);
+      showToast(newCount > 0 
+        ? `Synced ${parsed.length} responses (${newCount} new candidates)! ✓` 
+        : `Synced! All ${parsed.length} responses are up to date ✓`
+      );
+    } else {
+      showToast('No candidate entries found in sheet');
+    }
+  } catch (err) {
+    console.error('Google Sheet sync error:', err);
+    showToast('Failed to fetch Google Sheet. Check URL or sharing settings.');
+    openSheetModal();
+  } finally {
+    if (syncBtn) syncBtn.textContent = '↻ Sync Form';
+  }
+}
+
+function openSheetModal() {
+  const modal = document.getElementById('sheet-modal-backdrop');
+  const input = document.getElementById('sheet-url-input');
+  if (input && state.sheetUrl) {
+    input.value = state.sheetUrl;
+  }
+  if (modal) {
+    modal.classList.remove('hidden');
+    if (input) input.focus();
+  }
+}
+
+function closeSheetModal() {
+  const modal = document.getElementById('sheet-modal-backdrop');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * --------------------------------------------------------------------------
  * Initial Responses Loading
  * --------------------------------------------------------------------------
  */
 function initData() {
-  if (window.INITIAL_RESPONSES && Array.isArray(window.INITIAL_RESPONSES) && window.INITIAL_RESPONSES.length > 0) {
+  if (state.sheetUrl) {
+    // If live Google Sheet is connected, sync from live sheet
+    syncGoogleSheetResponses(false);
+  } else if (window.INITIAL_RESPONSES && Array.isArray(window.INITIAL_RESPONSES) && window.INITIAL_RESPONSES.length > 0) {
     state.candidates = window.INITIAL_RESPONSES;
     applyFilters();
     updateCounts();
@@ -792,7 +922,20 @@ function openCandidateModal(index) {
     ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>` : '<span class="unanswered">No Portfolio</span>'}
   `;
 
-  // Populate Interviewer Notes & Feedback
+  // All 8 Actual Questions
+  const fieldsEl = document.getElementById('modal-fields');
+  fieldsEl.innerHTML = `
+    ${renderField('Have you ever contributed to an open-source project?', c.contributed, q)}
+    ${renderField('Which sub-teams/domains are you most interested in joining?', c.domains, q)}
+    ${renderField('What tech stack or tools are you familiar with?', c.techStack, q, true)}
+    ${renderField('If YES: Which organizations/repositories have you contributed to?', c.contributions, q)}
+    ${renderField('If NO: Which open-source software, library, or tool do you admire the most, and why?', c.admiredTool, q)}
+    ${renderField('What does Open Source (FOSS) mean to you, and what are your thoughts on its culture?', c.fossMeaning, q)}
+    ${renderField('Why do you want to join UFC FOSS, and what do you hope to achieve here?', c.whyJoin, q)}
+    ${renderField("Anything else you'd like to share with us?", c.otherInfo, q)}
+  `;
+
+  // Populate Interviewer Notes & Feedback (At bottom of modal)
   const noteInput = document.getElementById('modal-note-input');
   const noteAuthorEl = document.getElementById('modal-note-author');
   const noteStatusEl = document.getElementById('modal-note-status');
@@ -807,19 +950,6 @@ function openCandidateModal(index) {
       noteStatusEl.textContent = 'Saved';
     }
   }
-
-  // All 8 Actual Questions
-  const fieldsEl = document.getElementById('modal-fields');
-  fieldsEl.innerHTML = `
-    ${renderField('Have you ever contributed to an open-source project?', c.contributed, q)}
-    ${renderField('Which sub-teams/domains are you most interested in joining?', c.domains, q)}
-    ${renderField('What tech stack or tools are you familiar with?', c.techStack, q, true)}
-    ${renderField('If YES: Which organizations/repositories have you contributed to?', c.contributions, q)}
-    ${renderField('If NO: Which open-source software, library, or tool do you admire the most, and why?', c.admiredTool, q)}
-    ${renderField('What does Open Source (FOSS) mean to you, and what are your thoughts on its culture?', c.fossMeaning, q)}
-    ${renderField('Why do you want to join UFC FOSS, and what do you hope to achieve here?', c.whyJoin, q)}
-    ${renderField("Anything else you'd like to share with us?", c.otherInfo, q)}
-  `;
 
   const backdrop = document.getElementById('modal-backdrop');
   if (backdrop) {
@@ -1042,6 +1172,54 @@ function bindEvents() {
   const reviewerInput = document.getElementById('reviewer-name-input');
   const resetBtn = document.getElementById('reset-decisions-btn');
   const noteInput = document.getElementById('modal-note-input');
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  const syncSheetBtn = document.getElementById('sync-sheet-btn');
+
+  // Theme Toggle Button
+  if (themeBtn) {
+    themeBtn.addEventListener('click', toggleTheme);
+  }
+
+  // Google Sheet Sync Button
+  if (syncSheetBtn) {
+    syncSheetBtn.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        openSheetModal();
+      } else {
+        syncGoogleSheetResponses(false);
+      }
+    });
+  }
+
+  // Google Sheet Connect Modal Controls
+  const sheetModal = document.getElementById('sheet-modal-backdrop');
+  const sheetModalClose = document.getElementById('sheet-modal-close');
+  const sheetCancelBtn = document.getElementById('sheet-cancel-btn');
+  const sheetSaveBtn = document.getElementById('sheet-save-btn');
+  const sheetUrlInput = document.getElementById('sheet-url-input');
+
+  if (sheetModalClose) sheetModalClose.addEventListener('click', closeSheetModal);
+  if (sheetCancelBtn) sheetCancelBtn.addEventListener('click', closeSheetModal);
+
+  if (sheetModal) {
+    sheetModal.addEventListener('click', (e) => {
+      if (e.target === sheetModal) closeSheetModal();
+    });
+  }
+
+  if (sheetSaveBtn && sheetUrlInput) {
+    sheetSaveBtn.addEventListener('click', () => {
+      const url = sheetUrlInput.value.trim();
+      if (!url) {
+        showToast('Please enter your Google Sheet link');
+        return;
+      }
+      state.sheetUrl = url;
+      saveLocalState();
+      closeSheetModal();
+      syncGoogleSheetResponses(false);
+    });
+  }
 
   // Reviewer Name Input
   if (reviewerInput) {
@@ -1219,7 +1397,6 @@ function bindEvents() {
 
   if (modalPrevBtn) {
     modalPrevBtn.addEventListener('click', () => {
-      // Flush note before changing candidate
       if (noteInput && state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
         saveCandidateNote(state.filtered[state.currentModalIndex].id, noteInput.value);
       }
@@ -1231,7 +1408,6 @@ function bindEvents() {
 
   if (modalNextBtn) {
     modalNextBtn.addEventListener('click', () => {
-      // Flush note before changing candidate
       if (noteInput && state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
         saveCandidateNote(state.filtered[state.currentModalIndex].id, noteInput.value);
       }
@@ -1261,14 +1437,17 @@ function bindEvents() {
 
   // Global Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
-    const isModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
+    const isCandidateModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
+    const isSheetModalOpen = sheetModal && !sheetModal.classList.contains('hidden');
 
-    if (isModalOpen) {
-      // If actively typing inside the notes textarea, don't capture arrows or escape
+    if (isSheetModalOpen) {
+      if (e.key === 'Escape') closeSheetModal();
+      return;
+    }
+
+    if (isCandidateModalOpen) {
       if (document.activeElement === noteInput) {
-        if (e.key === 'Escape') {
-          noteInput.blur();
-        }
+        if (e.key === 'Escape') noteInput.blur();
         return;
       }
 
