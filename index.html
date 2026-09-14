@@ -3,56 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UFC FOSS Responses</title>
+  <title>UFC FOSS — Responses</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container">
-    <!-- Minimal Header -->
-    <header class="header">
-      <div class="logo">
-        <span class="logo-box">&lt;/&gt;</span>
-        <h1>UFC FOSS <span class="green">Responses</span></h1>
-        <span class="count-badge" id="count-badge">75 candidates</span>
+  <div class="wrap">
+
+    <header class="top">
+      <div class="brand">
+        <span class="mark">UFC<span class="dot">/</span>FOSS</span>
+        <span class="tally" id="count-badge">75</span>
       </div>
-      <div class="header-actions">
-        <label class="btn-import" for="csv-file-input" title="Upload new Google Forms CSV export">
-          + Import CSV
-        </label>
-        <input type="file" id="csv-file-input" accept=".csv" style="display: none;">
-      </div>
+      <label class="import" for="csv-file-input">Import CSV</label>
+      <input type="file" id="csv-file-input" accept=".csv" hidden>
     </header>
 
-    <!-- Single Search Bar -->
-    <div class="search-section">
-      <div class="search-box">
-        <input 
-          type="text" 
-          id="search-input" 
-          placeholder="Search by candidate name, roll no, branch, tech stack, or response text..." 
-          autocomplete="off" 
-          spellcheck="false"
-          autofocus
-        >
-        <button id="clear-search" class="clear-btn hidden">&times;</button>
-      </div>
-      <div class="search-meta">
-        <span id="results-count">Showing 75 candidates</span>
-      </div>
+    <div class="search">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search name, roll no, branch, tech stack, or a response…"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button id="clear-search" class="clear hidden" aria-label="Clear search">&times;</button>
+    </div>
+    <p class="meta" id="results-count">Showing all 75 candidates</p>
+
+    <main id="cards-container" class="list"></main>
+
+    <div id="empty-state" class="empty hidden">
+      <p>Nothing matches that search.</p>
     </div>
 
-    <!-- Candidate Cards -->
-    <main id="cards-container" class="cards-container">
-      <!-- Injected by JavaScript -->
-    </main>
-
-    <!-- Empty State -->
-    <div id="empty-state" class="empty-state hidden">
-      <p>No candidates found matching your search.</p>
-    </div>
   </div>
 
   <div id="toast" class="toast hidden"></div>

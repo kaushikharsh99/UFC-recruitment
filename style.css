@@ -1,360 +1,303 @@
 /* ==========================================================================
-   UFC FOSS CLUB — MINIMAL RESPONSES VIEWER
-   Strict Theme: Flat Solid Black (#000000) & Solid Green (#00ff66)
-   Zero Gradients. Clean & Minimal.
+   UFC FOSS — Responses
+   Black / white / signal-green, nothing else.
    ========================================================================== */
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #000000;
+  --ink: #f0f0f0;
+  --ink-dim: #767676;
+  --ink-faint: #454545;
+  --line: #1b1b1b;
+  --green: #00ff66;
+  --green-dim: #0a4a25;
 }
 
 body {
-  background-color: #000000;
-  color: #ffffff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.55;
   min-height: 100vh;
-  padding-bottom: 5rem;
 }
 
-/* Custom Scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  background: #000000;
-}
-::-webkit-scrollbar-thumb {
-  background: #222222;
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #00ff66;
-}
+.mono { font-family: 'IBM Plex Mono', monospace; }
+.hidden { display: none !important; }
 
-/* Utilities */
-.green {
-  color: #00ff66;
-}
-
-.font-mono {
-  font-family: 'Fira Code', monospace;
-}
-
-.hidden {
-  display: none !important;
-}
-
-/* Container */
-.container {
-  max-width: 1080px;
+.wrap {
+  max-width: 760px;
   margin: 0 auto;
-  padding: 2rem 1.25rem;
+  padding: 3.5rem 1.5rem 6rem;
 }
 
-/* Header */
-.header {
+/* ---------- Header ---------- */
+
+.top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid #1a1a1a;
-  margin-bottom: 1.75rem;
+  gap: 1rem;
+  margin-bottom: 2.75rem;
 }
 
-.logo {
+.brand {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: baseline;
+  gap: 0.6rem;
 }
 
-.logo-box {
-  background: #000000;
-  border: 1px solid #00ff66;
-  color: #00ff66;
-  font-family: 'Fira Code', monospace;
-  font-size: 0.85rem;
+.mark {
+  font-size: 1.15rem;
   font-weight: 700;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
+  letter-spacing: -0.01em;
 }
 
-.logo h1 {
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.mark .dot {
+  color: var(--green);
 }
 
-.count-badge {
+.tally {
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
-  font-family: 'Fira Code', monospace;
-  background: #0d0d0d;
-  color: #00ff66;
-  border: 1px solid #1f1f1f;
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
+  color: var(--ink-dim);
 }
 
-.btn-import {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #888888;
-  background: #0a0a0a;
-  border: 1px solid #222222;
-  padding: 0.45rem 0.85rem;
-  border-radius: 4px;
+.import {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
   cursor: pointer;
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid var(--line);
   transition: color 0.15s, border-color 0.15s;
 }
 
-.btn-import:hover {
-  color: #00ff66;
-  border-color: #00ff66;
+.import:hover {
+  color: var(--green);
+  border-color: var(--green);
 }
 
-/* Search Bar */
-.search-section {
-  margin-bottom: 2rem;
-}
+/* ---------- Search ---------- */
 
-.search-box {
+.search {
   position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.search-box input {
-  width: 100%;
-  background: #0a0a0a;
-  border: 1px solid #222222;
-  color: #ffffff;
-  font-family: 'Inter', sans-serif;
-  font-size: 1rem;
-  padding: 0.95rem 2.8rem 0.95rem 1.15rem;
-  border-radius: 6px;
-  outline: none;
+  border-bottom: 1px solid var(--line);
   transition: border-color 0.15s;
 }
 
-.search-box input:focus {
-  border-color: #00ff66;
-  background: #000000;
+.search:focus-within {
+  border-color: var(--green);
 }
 
-.clear-btn {
-  position: absolute;
-  right: 1rem;
+.search input {
+  width: 100%;
   background: transparent;
   border: none;
-  color: #666666;
-  font-size: 1.3rem;
-  cursor: pointer;
+  outline: none;
+  color: var(--ink);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem;
+  padding: 0.7rem 2rem 0.7rem 0;
+}
+
+.search input::placeholder {
+  color: var(--ink-faint);
+}
+
+.clear {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 1.4rem;
   line-height: 1;
+  cursor: pointer;
 }
 
-.clear-btn:hover {
-  color: #00ff66;
-}
+.clear:hover { color: var(--green); }
 
-.search-meta {
+.meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--ink-faint);
   margin-top: 0.6rem;
-  font-size: 0.8rem;
-  color: #777777;
-  font-family: 'Fira Code', monospace;
+  margin-bottom: 0;
 }
 
-/* Candidate Cards List */
-.cards-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+/* ---------- List ---------- */
+
+.list {
+  margin-top: 1rem;
 }
 
-.card {
-  background: #0a0a0a;
-  border: 1px solid #1a1a1a;
-  border-radius: 8px;
-  padding: 1.5rem;
-  transition: border-color 0.15s;
+.entry {
+  padding: 2.25rem 0;
+  border-bottom: 1px solid var(--line);
 }
 
-.card:hover {
-  border-color: #00ff66;
+.entry:first-child {
+  padding-top: 2.5rem;
 }
 
-/* Card Header */
-.card-head {
+.entry-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding-bottom: 0.85rem;
-  border-bottom: 1px solid #161616;
+  margin-bottom: 0.35rem;
 }
 
-.card-title {
+.name {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.time {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.tags {
   display: flex;
-  align-items: center;
-  gap: 0.65rem;
   flex-wrap: wrap;
-}
-
-.candidate-name {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.badge {
+  align-items: center;
+  gap: 0.7rem;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 0.75rem;
-  font-family: 'Fira Code', monospace;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-  background: #000000;
-  border: 1px solid #222222;
-  color: #aaaaaa;
+  color: var(--ink-dim);
+  margin-bottom: 1rem;
 }
 
-.badge-branch {
-  color: #00ff66;
-  border-color: rgba(0, 255, 102, 0.4);
+.tags span {
+  position: relative;
+  padding-left: 0.85rem;
 }
 
-.badge-roll {
-  color: #ffffff;
+.tags span:first-child {
+  padding-left: 0;
+}
+
+.tags span:first-child::before {
+  content: none;
+}
+
+.tags span::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.2em;
+  bottom: 0.2em;
+  width: 1px;
+  background: var(--line);
+}
+
+.tag-status {
+  color: var(--green);
+}
+
+.tag-roll {
   cursor: pointer;
 }
-.badge-roll:hover {
-  border-color: #00ff66;
-  color: #00ff66;
+
+.tag-roll:hover {
+  color: var(--green);
 }
 
-.badge-contrib {
-  background: #00ff66;
-  color: #000000;
-  font-weight: 700;
-  border: 1px solid #00ff66;
-}
-
-.badge-learn {
-  color: #777777;
-}
-
-.timestamp {
-  font-size: 0.72rem;
-  font-family: 'Fira Code', monospace;
-  color: #555555;
-}
-
-/* Contact Links */
-.card-links {
+.links {
   display: flex;
-  align-items: center;
-  gap: 1rem;
   flex-wrap: wrap;
-  padding: 0.75rem 0;
-  font-size: 0.82rem;
-  border-bottom: 1px solid #141414;
+  gap: 1.1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  margin-bottom: 1.25rem;
 }
 
-.card-link {
-  color: #00ff66;
+.links a {
+  color: var(--green);
   text-decoration: none;
-  font-family: 'Fira Code', monospace;
-  transition: text-decoration 0.15s;
+  border-bottom: 1px solid transparent;
 }
 
-.card-link:hover {
-  text-decoration: underline;
+.links a:hover {
+  border-bottom-color: var(--green);
 }
 
-.link-phone {
-  color: #888888;
-}
-.link-phone:hover {
-  color: #00ff66;
+.links a.dim {
+  color: var(--ink-dim);
 }
 
-/* Actual Response Sections */
-.responses-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-top: 1rem;
+.links a.dim:hover {
+  color: var(--green);
 }
 
-.response-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.field {
+  margin-bottom: 1.15rem;
 }
 
-.response-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #00ff66;
-  font-family: 'Fira Code', monospace;
+.field:last-child { margin-bottom: 0; }
+
+.field-label {
+  font-size: 0.7rem;
+  color: var(--ink-dim);
+  margin-bottom: 0.3rem;
 }
 
-.response-text {
-  font-size: 0.9rem;
-  color: #d1d1d1;
-  line-height: 1.6;
+.field-text {
+  font-size: 0.94rem;
+  color: #cfcfcf;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.response-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: 0.15rem;
+.field-text.mono {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.85rem;
 }
 
-.tag {
-  font-size: 0.75rem;
-  font-family: 'Fira Code', monospace;
-  padding: 0.15rem 0.5rem;
-  background: #000000;
-  border: 1px solid #222222;
-  color: #cccccc;
-  border-radius: 4px;
-}
-
-/* Highlight search matches */
 mark.match {
-  background: #00ff66;
-  color: #000000;
-  font-weight: 700;
-  padding: 0 0.15rem;
-  border-radius: 2px;
+  background: var(--green);
+  color: #000;
+  padding: 0 0.1rem;
 }
 
-/* Empty State */
-.empty-state {
+/* ---------- Empty state ---------- */
+
+.empty {
+  padding: 5rem 0;
   text-align: center;
-  padding: 4rem 1rem;
-  color: #666666;
-  font-size: 1rem;
+  color: var(--ink-dim);
+  font-size: 0.95rem;
 }
 
-/* Toast */
+/* ---------- Toast ---------- */
+
 .toast {
   position: fixed;
-  bottom: 1.5rem;
-  right: 1.5rem;
+  left: 50%;
+  bottom: 2rem;
+  transform: translateX(-50%);
   background: #0a0a0a;
-  border: 1px solid #00ff66;
-  color: #00ff66;
-  font-family: 'Fira Code', monospace;
-  font-size: 0.82rem;
-  padding: 0.6rem 1rem;
-  border-radius: 4px;
-  z-index: 1000;
+  border: 1px solid var(--green);
+  color: var(--green);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  padding: 0.6rem 1.1rem;
+  border-radius: 3px;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 560px) {
+  .wrap { padding: 2.5rem 1.1rem 4rem; }
+  .name { font-size: 1.15rem; }
 }

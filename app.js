@@ -261,84 +261,73 @@ function render() {
     const waPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
 
     return `
-      <article class="card">
-        <!-- Header -->
-        <div class="card-head">
-          <div class="card-title">
-            <h2 class="candidate-name">${highlight(c.name, q)}</h2>
-            ${c.branch ? `<span class="badge badge-branch">${highlight(c.branch, q)}</span>` : ''}
-            ${c.year ? `<span class="badge">${highlight(c.year, q)}</span>` : ''}
-            ${c.rollNo ? `<span class="badge badge-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy roll number">#${highlight(c.rollNo, q)}</span>` : ''}
-            ${isContributor 
-              ? `<span class="badge badge-contrib">Contributor</span>` 
-              : `<span class="badge badge-learn">Eager to learn</span>`}
-          </div>
-          ${c.timestamp ? `<span class="timestamp">${escapeHtml(c.timestamp)}</span>` : ''}
+      <article class="entry">
+        <div class="entry-head">
+          <h2 class="name">${highlight(c.name, q)}</h2>
+          ${c.timestamp ? `<span class="time">${escapeHtml(c.timestamp)}</span>` : ''}
         </div>
 
-        <!-- Contact Links -->
-        <div class="card-links">
-          ${c.email ? `<a href="mailto:${escapeHtml(c.email)}" class="card-link">${highlight(c.email, q)}</a>` : ''}
-          ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="card-link link-phone">WhatsApp: ${highlight(c.phone, q)}</a>` : ''}
-          ${githubUrl ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer" class="card-link">GitHub ↗</a>` : ''}
-          ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer" class="card-link">Portfolio / LinkedIn ↗</a>` : ''}
+        <div class="tags">
+          ${c.branch ? `<span>${highlight(c.branch, q)}</span>` : ''}
+          ${c.year ? `<span>${highlight(c.year, q)}</span>` : ''}
+          ${c.rollNo ? `<span class="tag-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy">${highlight(c.rollNo, q)}</span>` : ''}
+          <span class="tag-status">${isContributor ? 'Contributor' : 'Eager to learn'}</span>
         </div>
 
-        <!-- Actual Responses -->
-        <div class="responses-body">
-          <!-- Domains -->
+        <div class="links">
+          ${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${highlight(c.email, q)}</a>` : ''}
+          ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="dim">WhatsApp</a>` : ''}
+          ${githubUrl ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer">GitHub</a>` : ''}
+          ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio</a>` : ''}
+        </div>
+
+        <div class="fields">
           ${c.domains ? `
-            <div class="response-item">
-              <div class="response-label">Sub-teams / Domains Interested</div>
-              <div class="response-text">${highlight(c.domains, q)}</div>
+            <div class="field">
+              <div class="field-label">Sub-teams interested in</div>
+              <div class="field-text">${highlight(c.domains, q)}</div>
             </div>
           ` : ''}
 
-          <!-- Tech Stack -->
           ${c.techStack ? `
-            <div class="response-item">
-              <div class="response-label">Tech Stack & Tools</div>
-              <div class="response-text font-mono">${highlight(c.techStack, q)}</div>
+            <div class="field">
+              <div class="field-label">Tech stack</div>
+              <div class="field-text mono">${highlight(c.techStack, q)}</div>
             </div>
           ` : ''}
 
-          <!-- Open Source Experience / Contributions -->
           ${isContributor && c.contributions ? `
-            <div class="response-item">
-              <div class="response-label">Open Source Contributions</div>
-              <div class="response-text">${highlight(c.contributions, q)}</div>
+            <div class="field">
+              <div class="field-label">Open source contributions</div>
+              <div class="field-text">${highlight(c.contributions, q)}</div>
             </div>
           ` : ''}
 
-          <!-- Admired FOSS Software -->
           ${!isContributor && c.admiredTool ? `
-            <div class="response-item">
-              <div class="response-label">Admired Open Source Tool & Why</div>
-              <div class="response-text">${highlight(c.admiredTool, q)}</div>
+            <div class="field">
+              <div class="field-label">Admired open source tool</div>
+              <div class="field-text">${highlight(c.admiredTool, q)}</div>
             </div>
           ` : ''}
 
-          <!-- FOSS Meaning & Philosophy -->
           ${c.fossMeaning ? `
-            <div class="response-item">
-              <div class="response-label">What Open Source (FOSS) Means to You</div>
-              <div class="response-text">${highlight(c.fossMeaning, q)}</div>
+            <div class="field">
+              <div class="field-label">What FOSS means to them</div>
+              <div class="field-text">${highlight(c.fossMeaning, q)}</div>
             </div>
           ` : ''}
 
-          <!-- Why Join UFC FOSS -->
           ${c.whyJoin ? `
-            <div class="response-item">
-              <div class="response-label">Why Join UFC FOSS & Goals</div>
-              <div class="response-text">${highlight(c.whyJoin, q)}</div>
+            <div class="field">
+              <div class="field-label">Why join UFC FOSS</div>
+              <div class="field-text">${highlight(c.whyJoin, q)}</div>
             </div>
           ` : ''}
 
-          <!-- Additional Notes -->
           ${c.otherInfo ? `
-            <div class="response-item">
-              <div class="response-label">Additional Information / Notes</div>
-              <div class="response-text">${highlight(c.otherInfo, q)}</div>
+            <div class="field">
+              <div class="field-label">Anything else</div>
+              <div class="field-text">${highlight(c.otherInfo, q)}</div>
             </div>
           ` : ''}
         </div>
@@ -356,10 +345,10 @@ function updateCount() {
   const total = state.candidates.length;
   const count = state.filtered.length;
 
-  badgeEl.textContent = `${total} candidates`;
+  badgeEl.textContent = `${total}`;
 
   if (state.query.trim()) {
-    countEl.textContent = `Found ${count} of ${total} candidates for "${state.query.trim()}"`;
+    countEl.textContent = `${count} of ${total} match "${state.query.trim()}"`;
   } else {
     countEl.textContent = `Showing all ${count} candidates`;
   }
@@ -409,7 +398,7 @@ function bindEvents() {
 
   // Roll number click to copy
   container.addEventListener('click', (e) => {
-    const rollBadge = e.target.closest('.badge-roll');
+    const rollBadge = e.target.closest('.tag-roll');
     if (rollBadge) {
       const roll = rollBadge.getAttribute('data-roll');
       if (roll) {
