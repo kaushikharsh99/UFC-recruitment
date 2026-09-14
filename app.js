@@ -1,7 +1,20 @@
 /**
  * UFC FOSS Club — Recruitment Responses Dashboard
+ * Real-Time Multi-Device Cloud Sync via Firebase Firestore + Offline Local Fallback
  * Horizontal Tiles, Select/Reject Decision Engine, Detail Modal Popup & CSV Export
  */
+
+// Firebase Configuration (Project: ufc-recruitment-2026, Region: asia-south1)
+const firebaseConfig = {
+  apiKey: "AIzaSyAjV2EkLn-qp3WW_gTUj_cFR8Eqc8h7SIY",
+  authDomain: "ufc-recruitment-2026.firebaseapp.com",
+  projectId: "ufc-recruitment-2026",
+  storageBucket: "ufc-recruitment-2026.firebasestorage.app",
+  messagingSenderId: "650383969929",
+  appId: "1:650383969929:web:fd74fe5a733061978d8058"
+};
+
+let db = null;
 
 // Application State
 const state = {
@@ -9,70 +22,258 @@ const state = {
   filtered: [],
   query: '',
   filterStatus: 'ALL', // 'ALL' | 'SELECTED' | 'REJECTED' | 'PENDING'
-  decisions: {}, // { [candidateId]: 'selected' | 'rejected' }
+  decisions: {}, // { [key]: 'selected' | 'rejected' }
+  reviewers: {}, // { [key]: reviewerName }
+  reviewerName: 'Reviewer',
   currentModalIndex: -1
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadSavedDecisions();
+  loadLocalState();
   initData();
   bindEvents();
+  initFirebase();
 });
 
 /**
- * Load & Save Decisions from localStorage
+ * --------------------------------------------------------------------------
+ * Firebase & Cloud Sync Management
+ * --------------------------------------------------------------------------
  */
-function loadSavedDecisions() {
+function initFirebase() {
   try {
-    const raw = localStorage.getItem('ufc_recruitment_decisions');
-    if (raw) {
-      state.decisions = JSON.parse(raw);
+    if (typeof firebase !== 'undefined') {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+
+      // Enable offline multi-tab persistence
+      db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+        // Will warn if multiple tabs open simultaneously on cold boot; safe to continue
+        console.warn('Firestore persistence warning:', err.code);
+      });
+
+      initFirestoreSync();
+    } else {
+      updateSyncIndicator('offline', 'Offline (Local Only)');
     }
-  } catch (e) {
-    console.error('Failed to load decisions from localStorage:', e);
-    state.decisions = {};
+  } catch (err) {
+    console.error('Firebase initialization error:', err);
+    updateSyncIndicator('offline', 'Offline (Local Only)');
   }
 }
 
-function saveDecisions() {
+function initFirestoreSync() {
+  if (!db) return;
+  updateSyncIndicator('syncing', 'Connecting…');
+
+  db.collection('decisions').onSnapshot((snapshot) => {
+    snapshot.docChanges().forEach((change) => {
+      const key = change.doc.id;
+      const data = change.doc.data();
+
+      if (change.type === 'removed') {
+        delete state.decisions[key];
+        delete state.reviewers[key];
+      } else if (data) {
+        state.decisions[key] = data.decision;
+        if (data.reviewer) state.reviewers[key] = data.reviewer;
+        if (data.candidateId) {
+          state.decisions[data.candidateId] = data.decision;
+          if (data.reviewer) state.reviewers[data.candidateId] = data.reviewer;
+        }
+      }
+    });
+
+    // Mirror to local cache for instant zero-latency loading on reload
+    saveLocalState();
+    updateCounts();
+    applyFilters();
+
+    // If modal is open, refresh its decision status badge
+    if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+      updateModalDecisionState(state.filtered[state.currentModalIndex]);
+    }
+
+    updateSyncIndicator('synced', 'Live Cloud Sync');
+  }, (error) => {
+    console.error('Firestore listener error:', error);
+    updateSyncIndicator('error', 'Cloud Disconnected');
+  });
+}
+
+function updateSyncIndicator(status, text) {
+  const badge = document.getElementById('sync-status-badge');
+  const label = document.getElementById('sync-status-text');
+  if (!badge || !label) return;
+
+  badge.className = `sync-status-badge ${status}`;
+  label.textContent = text;
+}
+
+/**
+ * --------------------------------------------------------------------------
+ * Local State Cache (Instant load on browser restart)
+ * --------------------------------------------------------------------------
+ */
+function loadLocalState() {
+  try {
+    const rawDecisions = localStorage.getItem('ufc_recruitment_decisions');
+    if (rawDecisions) {
+      state.decisions = JSON.parse(rawDecisions);
+    }
+    const rawReviewers = localStorage.getItem('ufc_recruitment_reviewers');
+    if (rawReviewers) {
+      state.reviewers = JSON.parse(rawReviewers);
+    }
+    const savedTab = localStorage.getItem('ufc_recruitment_tab');
+    if (savedTab && ['ALL', 'SELECTED', 'REJECTED', 'PENDING'].includes(savedTab)) {
+      state.filterStatus = savedTab;
+    }
+    const savedReviewer = localStorage.getItem('ufc_reviewer_name');
+    if (savedReviewer && savedReviewer.trim()) {
+      state.reviewerName = savedReviewer.trim();
+    }
+  } catch (e) {
+    console.error('Error loading localStorage cache:', e);
+  }
+}
+
+function saveLocalState() {
   try {
     localStorage.setItem('ufc_recruitment_decisions', JSON.stringify(state.decisions));
+    localStorage.setItem('ufc_recruitment_reviewers', JSON.stringify(state.reviewers));
+    localStorage.setItem('ufc_recruitment_tab', state.filterStatus);
+    localStorage.setItem('ufc_reviewer_name', state.reviewerName);
   } catch (e) {
-    console.error('Failed to save decisions to localStorage:', e);
+    console.error('Error saving localStorage cache:', e);
   }
 }
 
 /**
- * Update a candidate's decision: 'selected' | 'rejected' | null
+ * --------------------------------------------------------------------------
+ * Candidate Key & Decision Resolvers
+ * --------------------------------------------------------------------------
  */
-function setCandidateDecision(candidateId, decision) {
+function getCandidateKey(c) {
+  if (!c) return null;
+  if (c.rollNo && c.rollNo.trim()) {
+    const clean = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `roll_${clean}`;
+  }
+  if (c.email && c.email.trim()) {
+    const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `email_${cleanEmail}`;
+  }
+  return `id_${c.id}`;
+}
+
+function getCandidateDecision(c) {
+  if (!c) return 'pending';
+  const key = getCandidateKey(c);
+  if (key && state.decisions[key]) return state.decisions[key];
+  if (c.rollNo) {
+    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
+    if (state.decisions[rollKey]) return state.decisions[rollKey];
+  }
+  if (state.decisions[c.id]) return state.decisions[c.id];
+  if (state.decisions[String(c.id)]) return state.decisions[String(c.id)];
+  return 'pending';
+}
+
+function getCandidateReviewer(c) {
+  if (!c) return '';
+  const key = getCandidateKey(c);
+  if (key && state.reviewers[key]) return state.reviewers[key];
+  if (c.rollNo) {
+    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
+    if (state.reviewers[rollKey]) return state.reviewers[rollKey];
+  }
+  if (state.reviewers[c.id]) return state.reviewers[c.id];
+  if (state.reviewers[String(c.id)]) return state.reviewers[String(c.id)];
+  return '';
+}
+
+/**
+ * Update candidate decision: 'selected' | 'rejected' | toggle to null
+ * Synchronizes to Cloud Firestore and mirrors to local cache
+ */
+async function setCandidateDecision(candidateId, decision) {
   candidateId = Number(candidateId);
-  const current = state.decisions[candidateId];
+  const c = state.candidates.find(item => Number(item.id) === candidateId) || state.filtered.find(item => Number(item.id) === candidateId);
+  if (!c) return;
+
+  const key = getCandidateKey(c);
+  const current = getCandidateDecision(c);
+  const reviewer = (state.reviewerName || 'Reviewer').trim();
 
   if (current === decision) {
     // Toggle off back to pending
+    delete state.decisions[key];
     delete state.decisions[candidateId];
+    delete state.decisions[String(candidateId)];
+    delete state.reviewers[key];
+    delete state.reviewers[candidateId];
+
     showToast('Decision cleared (Pending)');
+    saveLocalState();
+    updateCounts();
+    applyFilters();
+
+    if (db) {
+      updateSyncIndicator('syncing', 'Syncing…');
+      db.collection('decisions').doc(key).delete()
+        .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
+        .catch(err => {
+          console.error('Firestore delete error:', err);
+          updateSyncIndicator('error', 'Cloud sync error');
+        });
+    }
   } else {
+    state.decisions[key] = decision;
     state.decisions[candidateId] = decision;
-    showToast(decision === 'selected' ? 'Candidate Selected ✓' : 'Candidate Rejected ✕');
+    state.reviewers[key] = reviewer;
+    state.reviewers[candidateId] = reviewer;
+
+    showToast(decision === 'selected' ? `Selected by ${reviewer} ✓` : `Rejected by ${reviewer} ✕`);
+    saveLocalState();
+    updateCounts();
+    applyFilters();
+
+    if (db) {
+      updateSyncIndicator('syncing', 'Syncing…');
+      db.collection('decisions').doc(key).set({
+        decision: decision,
+        reviewer: reviewer,
+        candidateId: candidateId,
+        name: c.name || '',
+        rollNo: c.rollNo || '',
+        branch: c.branch || '',
+        year: c.year || '',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true })
+        .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
+        .catch(err => {
+          console.error('Firestore save error:', err);
+          updateSyncIndicator('error', 'Cloud sync error');
+        });
+    }
   }
 
-  saveDecisions();
-  updateCounts();
-  applyFilters();
-
-  // If modal is currently viewing this candidate, update modal buttons and badge
+  // If modal is currently viewing this candidate, update its UI
   if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
-    const activeCandidate = state.filtered[state.currentModalIndex];
-    if (activeCandidate.id === candidateId) {
-      updateModalDecisionState(activeCandidate);
+    const active = state.filtered[state.currentModalIndex];
+    if (Number(active.id) === candidateId) {
+      updateModalDecisionState(active);
     }
   }
 }
 
 /**
- * Load Initial Responses
+ * --------------------------------------------------------------------------
+ * Initial Responses Loading
+ * --------------------------------------------------------------------------
  */
 function initData() {
   if (window.INITIAL_RESPONSES && Array.isArray(window.INITIAL_RESPONSES) && window.INITIAL_RESPONSES.length > 0) {
@@ -220,16 +421,20 @@ function loadCSV(csvText) {
 }
 
 /**
- * Clean and normalize URLs
+ * --------------------------------------------------------------------------
+ * URL & Text Sanitization
+ * --------------------------------------------------------------------------
  */
 function cleanUrl(url) {
-  if (!url) return '';
-  let u = url.trim();
-  if (!u) return '';
-  if (!/^https?:\/\//i.test(u)) {
-    u = 'https://' + u;
+  if (!url || typeof url !== 'string') return '';
+  let cleaned = url.trim();
+  if (!cleaned || cleaned.toLowerCase() === 'no' || cleaned.toLowerCase() === 'none' || cleaned === '—' || cleaned === '-') {
+    return '';
   }
-  return u;
+  if (!/^https?:\/\//i.test(cleaned)) {
+    cleaned = 'https://' + cleaned;
+  }
+  return cleaned;
 }
 
 function escapeHtml(str) {
@@ -255,14 +460,16 @@ function escapeRegex(str) {
 }
 
 /**
- * Filter Candidates based on search query and status tab
+ * --------------------------------------------------------------------------
+ * Filtering & List Rendering
+ * --------------------------------------------------------------------------
  */
 function applyFilters() {
   const q = state.query.toLowerCase().trim();
   const statusFilter = state.filterStatus;
 
   state.filtered = state.candidates.filter(c => {
-    const status = state.decisions[c.id] || 'pending';
+    const status = getCandidateDecision(c);
 
     // Status tab filter
     if (statusFilter === 'SELECTED' && status !== 'selected') return false;
@@ -315,7 +522,8 @@ function renderTiles() {
 
   container.innerHTML = state.filtered.map((c, index) => {
     const isContributor = (c.contributed || '').toLowerCase().startsWith('yes');
-    const decision = state.decisions[c.id] || 'pending';
+    const decision = getCandidateDecision(c);
+    const reviewer = getCandidateReviewer(c);
 
     const cleanDigits = (c.phone || '').replace(/[^0-9]/g, '');
     const waPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
@@ -330,8 +538,14 @@ function renderTiles() {
     let statusBadgeHtml = '';
     if (decision === 'selected') {
       statusBadgeHtml = `<span class="badge-status badge-selected">Selected</span>`;
+      if (reviewer) {
+        statusBadgeHtml += `<span class="reviewer-badge reviewer-selected" title="Selected by ${escapeHtml(reviewer)}">by ${escapeHtml(reviewer)}</span>`;
+      }
     } else if (decision === 'rejected') {
       statusBadgeHtml = `<span class="badge-status badge-rejected">Rejected</span>`;
+      if (reviewer) {
+        statusBadgeHtml += `<span class="reviewer-badge reviewer-rejected" title="Rejected by ${escapeHtml(reviewer)}">by ${escapeHtml(reviewer)}</span>`;
+      }
     } else {
       statusBadgeHtml = `<span class="badge-status badge-pending">Pending</span>`;
     }
@@ -391,7 +605,9 @@ function renderField(question, value, query, isMono = false) {
 }
 
 /**
- * Open Candidate Details in Modal Popup Window
+ * --------------------------------------------------------------------------
+ * Modal Details View
+ * --------------------------------------------------------------------------
  */
 function openCandidateModal(index) {
   if (index < 0 || index >= state.filtered.length) return;
@@ -419,7 +635,7 @@ function openCandidateModal(index) {
     ${c.timestamp ? `<span class="mono" style="font-size: 0.7rem; color: var(--ink-faint); margin-left: 0.4rem;">${escapeHtml(c.timestamp)}</span>` : ''}
   `;
 
-  // Update Status Badge and Buttons
+  // Update Status Badge and Decision Buttons
   updateModalDecisionState(c);
 
   // Quick Links
@@ -455,39 +671,40 @@ function openCandidateModal(index) {
  * Update decision state in modal
  */
 function updateModalDecisionState(candidate) {
-  const decision = state.decisions[candidate.id] || 'pending';
+  const decision = getCandidateDecision(candidate);
+  const reviewer = getCandidateReviewer(candidate);
   const badgeEl = document.getElementById('modal-status-badge');
   const rejectBtn = document.getElementById('modal-reject-btn');
   const selectBtn = document.getElementById('modal-select-btn');
 
-  // Badge
+  if (!badgeEl) return;
+
   badgeEl.className = 'badge-status';
   if (decision === 'selected') {
     badgeEl.classList.add('badge-selected');
-    badgeEl.textContent = 'Selected';
+    badgeEl.textContent = reviewer ? `Selected (by ${reviewer})` : 'Selected';
   } else if (decision === 'rejected') {
     badgeEl.classList.add('badge-rejected');
-    badgeEl.textContent = 'Rejected';
+    badgeEl.textContent = reviewer ? `Rejected (by ${reviewer})` : 'Rejected';
   } else {
     badgeEl.classList.add('badge-pending');
     badgeEl.textContent = 'Pending';
   }
 
   // Buttons active states
-  rejectBtn.classList.toggle('active', decision === 'rejected');
-  selectBtn.classList.toggle('active', decision === 'selected');
+  if (rejectBtn) rejectBtn.classList.toggle('active', decision === 'rejected');
+  if (selectBtn) selectBtn.classList.toggle('active', decision === 'selected');
 }
 
-/**
- * Close Modal
- */
 function closeModal() {
   document.getElementById('modal-backdrop').classList.add('hidden');
   state.currentModalIndex = -1;
 }
 
 /**
- * Update UI counts and tabs tallies
+ * --------------------------------------------------------------------------
+ * Counters & Results Label
+ * --------------------------------------------------------------------------
  */
 function updateCounts() {
   const total = state.candidates.length;
@@ -495,22 +712,39 @@ function updateCounts() {
   let rejected = 0;
 
   state.candidates.forEach(c => {
-    const status = state.decisions[c.id];
+    const status = getCandidateDecision(c);
     if (status === 'selected') selected++;
     else if (status === 'rejected') rejected++;
   });
 
   const pending = total - selected - rejected;
 
-  document.getElementById('count-all').textContent = total;
-  document.getElementById('count-selected').textContent = selected;
-  document.getElementById('count-rejected').textContent = rejected;
-  document.getElementById('count-pending').textContent = pending;
-  document.getElementById('export-count').textContent = selected;
+  const countAll = document.getElementById('count-all');
+  const countSelected = document.getElementById('count-selected');
+  const countRejected = document.getElementById('count-rejected');
+  const countPending = document.getElementById('count-pending');
+  const exportCount = document.getElementById('export-count');
+
+  if (countAll) countAll.textContent = total;
+  if (countSelected) countSelected.textContent = selected;
+  if (countRejected) countRejected.textContent = rejected;
+  if (countPending) countPending.textContent = pending;
+  if (exportCount) exportCount.textContent = selected;
+
+  const resetBtn = document.getElementById('reset-decisions-btn');
+  if (resetBtn) {
+    if (selected > 0 || rejected > 0) {
+      resetBtn.classList.remove('hidden');
+    } else {
+      resetBtn.classList.add('hidden');
+    }
+  }
 }
 
 function updateResultsLabel() {
   const countEl = document.getElementById('results-count');
+  if (!countEl) return;
+
   const count = state.filtered.length;
   const total = state.candidates.length;
 
@@ -527,10 +761,12 @@ function updateResultsLabel() {
 }
 
 /**
+ * --------------------------------------------------------------------------
  * Export Selected Candidates to CSV
+ * --------------------------------------------------------------------------
  */
 function exportSelectedToCSV() {
-  const selectedCandidates = state.candidates.filter(c => state.decisions[c.id] === 'selected');
+  const selectedCandidates = state.candidates.filter(c => getCandidateDecision(c) === 'selected');
 
   if (selectedCandidates.length === 0) {
     showToast('No candidates are marked as Selected yet.');
@@ -542,6 +778,7 @@ function exportSelectedToCSV() {
     'Roll Number',
     'Branch',
     'Year',
+    'Selected By (Reviewer)',
     'WhatsApp / Contact',
     'Email',
     'GitHub URL',
@@ -569,6 +806,7 @@ function exportSelectedToCSV() {
       c.rollNo,
       c.branch,
       c.year,
+      getCandidateReviewer(c) || 'Reviewer',
       c.phone,
       c.email,
       c.github,
@@ -598,11 +836,14 @@ function exportSelectedToCSV() {
 }
 
 /**
+ * --------------------------------------------------------------------------
  * Toast Helper
+ * --------------------------------------------------------------------------
  */
 let toastTimer;
 function showToast(msg) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.textContent = msg;
   toast.classList.remove('hidden');
   clearTimeout(toastTimer);
@@ -612,7 +853,9 @@ function showToast(msg) {
 }
 
 /**
- * Event Bindings
+ * --------------------------------------------------------------------------
+ * Event Listeners & Keyboard Shortcuts
+ * --------------------------------------------------------------------------
  */
 function bindEvents() {
   const searchInput = document.getElementById('search-input');
@@ -620,76 +863,141 @@ function bindEvents() {
   const fileInput = document.getElementById('csv-file-input');
   const container = document.getElementById('cards-container');
   const exportBtn = document.getElementById('export-selected-btn');
+  const reviewerInput = document.getElementById('reviewer-name-input');
+  const resetBtn = document.getElementById('reset-decisions-btn');
 
-  // Search input
-  searchInput.addEventListener('input', (e) => {
-    state.query = e.target.value;
-    if (state.query) {
-      clearBtn.classList.remove('hidden');
-    } else {
-      clearBtn.classList.add('hidden');
+  // Reviewer Name Input
+  if (reviewerInput) {
+    if (state.reviewerName && state.reviewerName !== 'Reviewer') {
+      reviewerInput.value = state.reviewerName;
     }
-    applyFilters();
-  });
+    reviewerInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      state.reviewerName = val || 'Reviewer';
+      saveLocalState();
+    });
+  }
 
-  clearBtn.addEventListener('click', () => {
-    searchInput.value = '';
-    state.query = '';
-    clearBtn.classList.add('hidden');
-    searchInput.focus();
-    applyFilters();
-  });
+  // Search Input
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      state.query = e.target.value;
+      if (state.query) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      applyFilters();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      state.query = '';
+      clearBtn.classList.add('hidden');
+      searchInput.focus();
+      applyFilters();
+    });
+  }
 
   // Filter Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
+    if (btn.getAttribute('data-tab') === state.filterStatus) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.filterStatus = btn.getAttribute('data-tab');
+      saveLocalState();
       applyFilters();
     });
   });
 
+  // Reset Decisions (Cloud + Local)
+  if (resetBtn) {
+    resetBtn.addEventListener('click', async () => {
+      const ok = confirm('Are you sure you want to reset all decisions from the Cloud Database and local cache? This will clear selections for all team members.');
+      if (!ok) return;
+
+      updateSyncIndicator('syncing', 'Resetting…');
+      state.decisions = {};
+      state.reviewers = {};
+      saveLocalState();
+      updateCounts();
+      applyFilters();
+
+      if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        updateModalDecisionState(state.filtered[state.currentModalIndex]);
+      }
+
+      if (db) {
+        try {
+          const snapshot = await db.collection('decisions').get();
+          const batch = db.batch();
+          snapshot.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+          updateSyncIndicator('synced', 'Live Cloud Sync');
+          showToast('All candidate decisions reset across cloud');
+        } catch (err) {
+          console.error('Reset error:', err);
+          updateSyncIndicator('error', 'Reset failed on Cloud');
+          showToast('Failed to reset cloud decisions');
+        }
+      } else {
+        showToast('All decisions reset locally');
+      }
+    });
+  }
+
   // Export Selected
-  exportBtn.addEventListener('click', exportSelectedToCSV);
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportSelectedToCSV);
+  }
 
   // Tiles clicks: Select/Reject actions or Open Modal
-  container.addEventListener('click', (e) => {
-    // Quick Select / Reject Buttons on Tile
-    const selectBtn = e.target.closest('.btn-tile-select');
-    if (selectBtn) {
-      const id = selectBtn.getAttribute('data-id');
-      setCandidateDecision(id, 'selected');
-      return;
-    }
-
-    const rejectBtn = e.target.closest('.btn-tile-reject');
-    if (rejectBtn) {
-      const id = rejectBtn.getAttribute('data-id');
-      setCandidateDecision(id, 'rejected');
-      return;
-    }
-
-    // Roll number copy
-    const rollBadge = e.target.closest('.tag-roll');
-    if (rollBadge) {
-      e.stopPropagation();
-      const roll = rollBadge.getAttribute('data-roll');
-      if (roll) {
-        navigator.clipboard.writeText(roll).then(() => {
-          showToast(`Copied Roll: #${roll}`);
-        });
+  if (container) {
+    container.addEventListener('click', (e) => {
+      // Quick Select / Reject Buttons on Tile
+      const selectBtn = e.target.closest('.btn-tile-select');
+      if (selectBtn) {
+        const id = selectBtn.getAttribute('data-id');
+        setCandidateDecision(id, 'selected');
+        return;
       }
-      return;
-    }
 
-    // Clicking anywhere on Tile opens the modal
-    const tile = e.target.closest('.tile');
-    if (tile && !e.target.closest('a')) {
-      const index = parseInt(tile.getAttribute('data-index'), 10);
-      openCandidateModal(index);
-    }
-  });
+      const rejectBtn = e.target.closest('.btn-tile-reject');
+      if (rejectBtn) {
+        const id = rejectBtn.getAttribute('data-id');
+        setCandidateDecision(id, 'rejected');
+        return;
+      }
+
+      // Roll number copy
+      const rollBadge = e.target.closest('.tag-roll');
+      if (rollBadge) {
+        e.stopPropagation();
+        const roll = rollBadge.getAttribute('data-roll');
+        if (roll) {
+          navigator.clipboard.writeText(roll).then(() => {
+            showToast(`Copied Roll: #${roll}`);
+          });
+        }
+        return;
+      }
+
+      // Clicking anywhere on Tile opens the modal
+      const tile = e.target.closest('.tile');
+      if (tile && !e.target.closest('a')) {
+        const index = parseInt(tile.getAttribute('data-index'), 10);
+        openCandidateModal(index);
+      }
+    });
+  }
 
   // Modal Controls
   const modalBackdrop = document.getElementById('modal-backdrop');
@@ -699,43 +1007,53 @@ function bindEvents() {
   const modalSelectBtn = document.getElementById('modal-select-btn');
   const modalRejectBtn = document.getElementById('modal-reject-btn');
 
-  modalCloseBtn.addEventListener('click', closeModal);
+  if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
 
-  modalBackdrop.addEventListener('click', (e) => {
-    if (e.target === modalBackdrop) {
-      closeModal();
-    }
-  });
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        closeModal();
+      }
+    });
+  }
 
-  modalPrevBtn.addEventListener('click', () => {
-    if (state.currentModalIndex > 0) {
-      openCandidateModal(state.currentModalIndex - 1);
-    }
-  });
+  if (modalPrevBtn) {
+    modalPrevBtn.addEventListener('click', () => {
+      if (state.currentModalIndex > 0) {
+        openCandidateModal(state.currentModalIndex - 1);
+      }
+    });
+  }
 
-  modalNextBtn.addEventListener('click', () => {
-    if (state.currentModalIndex < state.filtered.length - 1) {
-      openCandidateModal(state.currentModalIndex + 1);
-    }
-  });
+  if (modalNextBtn) {
+    modalNextBtn.addEventListener('click', () => {
+      if (state.currentModalIndex < state.filtered.length - 1) {
+        openCandidateModal(state.currentModalIndex + 1);
+      }
+    });
+  }
 
-  modalSelectBtn.addEventListener('click', () => {
-    if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
-      const c = state.filtered[state.currentModalIndex];
-      setCandidateDecision(c.id, 'selected');
-    }
-  });
+  if (modalSelectBtn) {
+    modalSelectBtn.addEventListener('click', () => {
+      if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        const c = state.filtered[state.currentModalIndex];
+        setCandidateDecision(c.id, 'selected');
+      }
+    });
+  }
 
-  modalRejectBtn.addEventListener('click', () => {
-    if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
-      const c = state.filtered[state.currentModalIndex];
-      setCandidateDecision(c.id, 'rejected');
-    }
-  });
+  if (modalRejectBtn) {
+    modalRejectBtn.addEventListener('click', () => {
+      if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+        const c = state.filtered[state.currentModalIndex];
+        setCandidateDecision(c.id, 'rejected');
+      }
+    });
+  }
 
   // Global Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
-    const isModalOpen = !modalBackdrop.classList.contains('hidden');
+    const isModalOpen = modalBackdrop && !modalBackdrop.classList.contains('hidden');
 
     if (isModalOpen) {
       if (e.key === 'Escape') {
@@ -752,28 +1070,32 @@ function bindEvents() {
     } else {
       if (e.key === '/' && document.activeElement !== searchInput) {
         e.preventDefault();
-        searchInput.focus();
-        searchInput.select();
-      } else if (e.key === 'Escape' && searchInput.value) {
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      } else if (e.key === 'Escape' && searchInput && searchInput.value) {
         searchInput.value = '';
         state.query = '';
-        clearBtn.classList.add('hidden');
+        if (clearBtn) clearBtn.classList.add('hidden');
         applyFilters();
       }
     }
   });
 
   // File import
-  fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        loadCSV(evt.target.result);
-      };
-      reader.readAsText(file, 'utf-8');
-    }
-  });
+  if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          loadCSV(evt.target.result);
+        };
+        reader.readAsText(file, 'utf-8');
+      }
+    });
+  }
 
   // Drag and drop CSV anywhere on page
   window.addEventListener('dragover', (e) => e.preventDefault());

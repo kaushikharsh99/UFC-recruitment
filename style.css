@@ -105,7 +105,14 @@ body {
 .brand-details {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.15rem;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 .brand-title {
@@ -113,6 +120,67 @@ body {
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.2;
+}
+
+/* Cloud Sync Status Badge */
+.sync-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  background: #0d0d0d;
+  border: 1px solid var(--line);
+  padding: 0.18rem 0.55rem;
+  border-radius: 4px;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.sync-status-badge.synced {
+  color: var(--green);
+  border-color: var(--green-border);
+  background: var(--green-subtle);
+}
+
+.sync-status-badge.syncing {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.sync-status-badge.error,
+.sync-status-badge.offline {
+  color: var(--ink-dim);
+  border-color: var(--line-strong);
+}
+
+.sync-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  display: inline-block;
+  transition: background 0.2s ease;
+}
+
+.sync-status-badge.synced .sync-dot {
+  background: var(--green);
+}
+
+.sync-status-badge.syncing .sync-dot {
+  background: #fbbf24;
+  animation: pulse-dot 0.9s infinite alternate;
+}
+
+.sync-status-badge.error .sync-dot {
+  background: var(--red);
+}
+
+@keyframes pulse-dot {
+  0% { opacity: 0.3; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.1); }
 }
 
 .brand-sub {
@@ -128,6 +196,43 @@ body {
   flex-wrap: wrap;
 }
 
+/* Reviewer Identifier Box */
+.reviewer-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #0b0b0b;
+  border: 1px solid var(--line);
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+}
+
+.reviewer-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  user-select: none;
+}
+
+.reviewer-input {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  width: 90px;
+  outline: none;
+}
+
+.reviewer-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.reviewer-input:focus {
+  color: var(--green);
+}
+
 .btn-action {
   font-family: var(--font-mono);
   font-size: 0.76rem;
@@ -141,6 +246,16 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+}
+
+.btn-reset {
+  background: #0c0c0c;
+  color: var(--ink-dim);
+}
+.btn-reset:hover {
+  background: var(--red-subtle);
+  border-color: var(--red-border);
+  color: var(--red);
 }
 
 .btn-export {
@@ -419,6 +534,31 @@ body {
   background: #18181b;
   color: var(--ink-dim);
   border: 1px solid #27272a;
+}
+
+/* Reviewer attribution badge */
+.reviewer-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+  background: #111111;
+  border: 1px solid var(--line);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.reviewer-badge.reviewer-selected {
+  color: var(--green);
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.reviewer-badge.reviewer-rejected {
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.06);
 }
 
 /* Tile Action Buttons */

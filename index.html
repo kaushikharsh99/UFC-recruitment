@@ -17,11 +17,24 @@
       <div class="brand">
         <img src="logo.png" alt="UFC FOSS Club Logo" class="brand-logo">
         <div class="brand-details">
-          <h1 class="brand-title">UFC FOSS CLUB</h1>
+          <div class="brand-title-row">
+            <h1 class="brand-title">UFC FOSS CLUB</h1>
+            <span class="sync-status-badge syncing" id="sync-status-badge" title="Live sync across all interviewers via Firebase Cloud DB">
+              <span class="sync-dot" id="sync-dot"></span>
+              <span id="sync-status-text">Connecting…</span>
+            </span>
+          </div>
           <span class="brand-sub">USAR &bull; Recruitment 2026</span>
         </div>
       </div>
       <div class="top-actions">
+        <div class="reviewer-box" title="Enter your name to tag candidate decisions made by you">
+          <span class="reviewer-label">Reviewer:</span>
+          <input type="text" id="reviewer-name-input" class="reviewer-input" placeholder="Your Name" maxlength="20" spellcheck="false">
+        </div>
+        <button id="reset-decisions-btn" class="btn-action btn-reset hidden" title="Clear all saved selections and rejections across cloud and local">
+          Reset All
+        </button>
         <button id="export-selected-btn" class="btn-action btn-export" title="Export selected candidates to CSV">
           Export Selected (<span id="export-count">0</span>)
         </button>
@@ -126,6 +139,10 @@
 
   <!-- Toast Notification -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Firebase Cloud Sync SDKs (Compat/CDN for zero-build real-time multi-device sync) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <script src="data.js"></script>
   <script src="app.js"></script>
