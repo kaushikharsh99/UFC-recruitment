@@ -19,7 +19,9 @@ let db = null;
 
 // Application State
 const state = {
-  candidates: [],
+  candidates: [], // Combined candidate list displayed in UI
+  excelCandidates: [], // Loaded from Google Sheet / CSV / initial data
+  walkinCandidates: [], // Synced live from Firebase Cloud Firestore & local backup
   filtered: [],
   query: '',
   filterStatus: 'ALL', // 'ALL' | 'SELECTED' | 'REJECTED' | 'PENDING'
@@ -31,6 +33,34 @@ const state = {
   sheetUrl: '',
   currentModalIndex: -1
 };
+
+/**
+ * Merge Walk-in candidates and Excel/Google Sheet candidates into unified list
+ * Walk-in candidates take top priority and appear at the top
+ */
+function mergeCandidates() {
+  const map = new Map();
+
+  // 1. Walk-in candidates
+  state.walkinCandidates.forEach(c => {
+    const key = c.rollNo ? c.rollNo.toString().trim().toLowerCase() : String(c.id);
+    if (key && !map.has(key)) {
+      map.set(key, c);
+    }
+  });
+
+  // 2. Google Sheet / Excel candidates
+  state.excelCandidates.forEach(c => {
+    const key = c.rollNo ? c.rollNo.toString().trim().toLowerCase() : String(c.id);
+    if (key && !map.has(key)) {
+      map.set(key, c);
+    }
+  });
+
+  state.candidates = Array.from(map.values());
+  applyFilters();
+  updateCounts();
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
@@ -223,45 +253,45 @@ function initFirestoreSync() {
 
   // Real-time listener for Walk-in applicants registered via /register
   db.collection('walkin_responses').onSnapshot((snapshot) => {
-    let hasNew = false;
+    const list = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (!data) return;
+      list.push({
+        id: doc.id,
+        timestamp: data.timestamp || '',
+        email: data.email || '',
+        name: data.name || 'Walk-in Applicant',
+        phone: data.phone || '',
+        rollNo: data.rollNo || '',
+        branch: data.branch || '',
+        year: data.year || '',
+        github: data.github || '',
+        linkedin: data.linkedin || '',
+        fossMeaning: data.fossMeaning || '',
+        contributed: data.contributed || '',
+        contributions: data.contributions || '',
+        admiredTool: data.admiredTool || '',
+        domains: data.domains || '',
+        techStack: data.techStack || '',
+        whyJoin: data.whyJoin || '',
+        otherInfo: data.otherInfo || '',
+        isWalkin: true
+      });
+    });
+
+    // Notify for any new submissions that arrive during active session
     snapshot.docChanges().forEach((change) => {
       if (change.type === 'added') {
-        const data = change.doc.data();
-        const cleanRoll = (data.rollNo || '').trim().toLowerCase();
-        const exists = state.candidates.some(c => (c.rollNo || '').trim().toLowerCase() === cleanRoll);
-        if (!exists) {
-          const walkinCandidate = {
-            id: change.doc.id,
-            timestamp: data.timestamp || '',
-            email: data.email || '',
-            name: data.name || 'Walk-in Applicant',
-            phone: data.phone || '',
-            rollNo: data.rollNo || '',
-            branch: data.branch || '',
-            year: data.year || '',
-            github: data.github || '',
-            linkedin: data.linkedin || '',
-            fossMeaning: data.fossMeaning || '',
-            contributed: data.contributed || '',
-            contributions: data.contributions || '',
-            admiredTool: data.admiredTool || '',
-            domains: data.domains || '',
-            techStack: data.techStack || '',
-            whyJoin: data.whyJoin || '',
-            otherInfo: data.otherInfo || '',
-            isWalkin: true
-          };
-          state.candidates.unshift(walkinCandidate);
-          hasNew = true;
-          showToast(`🔔 New Walk-in: ${data.name} (${data.branch || 'Registered'})`);
+        const d = change.doc.data();
+        if (d && d.name && state.walkinCandidates.length > 0) {
+          showToast(`🔔 New Walk-in: ${d.name} (${d.branch || 'Registered'})`);
         }
       }
     });
 
-    if (hasNew) {
-      updateCounts();
-      applyFilters();
-    }
+    state.walkinCandidates = list;
+    mergeCandidates();
   }, (err) => {
     console.warn('Walk-in listener notice:', err);
   });
@@ -591,10 +621,9 @@ async function syncGoogleSheetResponses(forceModal = false) {
     const parsed = mapCSV(rows);
 
     if (parsed.length > 0) {
-      const oldCount = state.candidates.length;
-      state.candidates = parsed;
-      applyFilters();
-      updateCounts();
+      const oldCount = state.excelCandidates.length;
+      state.excelCandidates = parsed;
+      mergeCandidates();
 
       const newCount = Math.max(0, parsed.length - oldCount);
       showToast(newCount > 0 
@@ -636,13 +665,28 @@ function closeSheetModal() {
  * --------------------------------------------------------------------------
  */
 function initData() {
+  // Load local walk-in candidates backup from server if running
+  fetch('/api/walkin-candidates')
+    .then(res => res.json())
+    .then(data => {
+      if (data && Array.isArray(data.candidates) && data.candidates.length > 0) {
+        data.candidates.forEach(wc => {
+          const cleanRoll = (wc.rollNo || '').toString().trim().toLowerCase();
+          if (!state.walkinCandidates.some(c => (c.rollNo || '').toString().trim().toLowerCase() === cleanRoll)) {
+            state.walkinCandidates.push({ ...wc, isWalkin: true });
+          }
+        });
+        mergeCandidates();
+      }
+    })
+    .catch(() => {});
+
   if (state.sheetUrl) {
     // If live Google Sheet is connected, sync from live sheet
     syncGoogleSheetResponses(false);
   } else if (window.INITIAL_RESPONSES && Array.isArray(window.INITIAL_RESPONSES) && window.INITIAL_RESPONSES.length > 0) {
-    state.candidates = window.INITIAL_RESPONSES;
-    applyFilters();
-    updateCounts();
+    state.excelCandidates = window.INITIAL_RESPONSES;
+    mergeCandidates();
   } else {
     fetch('UFC FOSS Recruitment Form (Responses) - Form responses 1.csv')
       .then(res => res.text())
@@ -650,8 +694,7 @@ function initData() {
         loadCSV(csv);
       })
       .catch(() => {
-        applyFilters();
-        updateCounts();
+        mergeCandidates();
       });
   }
 }
@@ -773,9 +816,8 @@ function loadCSV(csvText) {
     const rows = parseCSV(csvText);
     const parsed = mapCSV(rows);
     if (parsed.length > 0) {
-      state.candidates = parsed;
-      applyFilters();
-      updateCounts();
+      state.excelCandidates = parsed;
+      mergeCandidates();
       showToast(`Loaded ${parsed.length} candidate responses`);
     }
   } catch (err) {
