@@ -3,27 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>UFC FOSS — Responses</title>
+  <title>UFC FOSS — Recruitment Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="wrap">
 
+    <!-- Top Header -->
     <header class="top">
       <div class="brand">
         <img src="logo.png" alt="UFC FOSS Club Logo" class="brand-logo">
         <div class="brand-details">
           <h1 class="brand-title">UFC FOSS CLUB</h1>
-          <span class="brand-sub">USAR &bull; <span class="tally" id="count-badge">75</span> responses</span>
+          <span class="brand-sub">USAR &bull; Recruitment 2026</span>
         </div>
       </div>
-      <label class="import" for="csv-file-input">+ Import CSV</label>
-      <input type="file" id="csv-file-input" accept=".csv" hidden>
+      <div class="top-actions">
+        <button id="export-selected-btn" class="btn-action btn-export" title="Export selected candidates to CSV">
+          Export Selected (<span id="export-count">0</span>)
+        </button>
+        <label class="btn-action btn-import" for="csv-file-input" title="Import updated CSV from Google Forms">
+          + Import CSV
+        </label>
+        <input type="file" id="csv-file-input" accept=".csv" hidden>
+      </div>
     </header>
 
+    <!-- Filter Tabs & Status Counters -->
+    <div class="status-tabs">
+      <button class="tab-btn active" data-tab="ALL">
+        All <span class="tab-count" id="count-all">75</span>
+      </button>
+      <button class="tab-btn" data-tab="SELECTED">
+        Selected <span class="tab-count tab-selected" id="count-selected">0</span>
+      </button>
+      <button class="tab-btn" data-tab="REJECTED">
+        Rejected <span class="tab-count tab-rejected" id="count-rejected">0</span>
+      </button>
+      <button class="tab-btn" data-tab="PENDING">
+        Pending <span class="tab-count" id="count-pending">75</span>
+      </button>
+    </div>
+
+    <!-- Boxed Search Bar -->
     <div class="search">
       <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"></circle>
@@ -32,7 +57,7 @@
       <input
         type="text"
         id="search-input"
-        placeholder="Search name, roll no, branch, tech stack, or a response…"
+        placeholder="Search candidate by name, roll no, branch, tech stack, or keyword… (Press / to focus)"
         autocomplete="off"
         spellcheck="false"
       >
@@ -40,14 +65,66 @@
     </div>
     <p class="meta" id="results-count">Showing all 75 candidates</p>
 
-    <main id="cards-container" class="list"></main>
+    <!-- Horizontal Candidate Tiles List -->
+    <main id="cards-container" class="tiles-list"></main>
 
+    <!-- Empty State -->
     <div id="empty-state" class="empty hidden">
-      <p>Nothing matches that search.</p>
+      <p>No candidates found matching your search and filter criteria.</p>
     </div>
 
   </div>
 
+  <!-- Detail Popup Modal -->
+  <div id="modal-backdrop" class="modal-backdrop hidden" tabindex="-1">
+    <div class="modal-window">
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="modal-head-info">
+          <div class="modal-name-row">
+            <h2 id="modal-name" class="modal-name">Candidate Name</h2>
+            <span id="modal-status-badge" class="badge-status badge-pending">Pending</span>
+          </div>
+          <div class="modal-tags" id="modal-tags">
+            <!-- Injected by JS: Branch, Year, Roll, Open Source status -->
+          </div>
+        </div>
+        <button id="modal-close" class="modal-close-btn" aria-label="Close modal (Esc)">&times;</button>
+      </div>
+
+      <!-- Modal Body: Links & All 8 Questions -->
+      <div class="modal-body">
+        <!-- Quick Contact Links -->
+        <div class="modal-links" id="modal-links">
+          <!-- WhatsApp, Email, GitHub, Portfolio -->
+        </div>
+
+        <!-- All Questions -->
+        <div class="modal-fields" id="modal-fields">
+          <!-- Form question boxes injected by JS -->
+        </div>
+      </div>
+
+      <!-- Modal Footer with Select & Reject Buttons -->
+      <div class="modal-footer">
+        <div class="modal-nav">
+          <button id="modal-prev-btn" class="btn-nav" title="Previous candidate (Left Arrow)">&larr; Prev</button>
+          <span id="modal-counter" class="modal-counter">1 / 75</span>
+          <button id="modal-next-btn" class="btn-nav" title="Next candidate (Right Arrow)">Next &rarr;</button>
+        </div>
+        <div class="modal-decision-btns">
+          <button id="modal-reject-btn" class="btn-decision btn-decision-reject">
+            ✕ Reject
+          </button>
+          <button id="modal-select-btn" class="btn-decision btn-decision-select">
+            ✓ Select
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
   <div id="toast" class="toast hidden"></div>
 
   <script src="data.js"></script>
