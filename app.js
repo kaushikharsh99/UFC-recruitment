@@ -295,6 +295,83 @@ function initFirestoreSync() {
   }, (err) => {
     console.warn('Walk-in listener notice:', err);
   });
+
+  // Real-time listener for candidates synced from Google Sheets across devices
+  db.collection('candidates').onSnapshot((snapshot) => {
+    if (!snapshot.empty) {
+      const cloudCandidates = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data && data.name) {
+          cloudCandidates.push(data);
+        }
+      });
+      if (cloudCandidates.length > 0) {
+        // Retain any existing parsed order or sort by timestamp/id
+        state.excelCandidates = cloudCandidates;
+        mergeCandidates();
+      }
+    }
+  }, (err) => {
+    console.warn('Candidates cloud sync notice:', err);
+  });
+
+  // Real-time listener for connected Google Sheet URL across coordinators
+  db.collection('config').doc('google_sheet').onSnapshot((doc) => {
+    if (doc.exists) {
+      const data = doc.data();
+      if (data && data.sheetUrl && data.sheetUrl.trim() && data.sheetUrl !== state.sheetUrl) {
+        state.sheetUrl = data.sheetUrl.trim();
+        saveLocalState();
+      }
+    }
+  }, (err) => {
+    console.warn('Config listener notice:', err);
+  });
+}
+
+/**
+ * Upload candidate responses to Firebase Cloud Firestore
+ * Syncs candidates across all reviewer devices instantly
+ */
+async function saveCandidatesToFirestore(candidatesList) {
+  if (!db || !candidatesList || candidatesList.length === 0) return;
+  try {
+    updateSyncIndicator('syncing', 'Syncing to Cloud…');
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < candidatesList.length; i += CHUNK_SIZE) {
+      const chunk = candidatesList.slice(i, i + CHUNK_SIZE);
+      const batch = db.batch();
+      chunk.forEach((c) => {
+        const key = getCandidateKey(c);
+        if (key) {
+          const docRef = db.collection('candidates').doc(key);
+          batch.set(docRef, {
+            ...c,
+            cloudSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+      });
+      await batch.commit();
+    }
+    updateSyncIndicator('synced', 'Live Cloud Sync');
+  } catch (err) {
+    console.error('Error saving candidates to Firestore:', err);
+    updateSyncIndicator('error', 'Cloud sync error');
+  }
+}
+
+async function saveSheetUrlToFirestore(url) {
+  if (!db || !url) return;
+  try {
+    await db.collection('config').doc('google_sheet').set({
+      sheetUrl: url.trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: state.reviewerName || 'Coordinator'
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Error saving sheet URL to Firestore:', err);
+  }
 }
 
 function updateSyncIndicator(status, text) {
@@ -624,11 +701,13 @@ async function syncGoogleSheetResponses(forceModal = false) {
       const oldCount = state.excelCandidates.length;
       state.excelCandidates = parsed;
       mergeCandidates();
+      saveCandidatesToFirestore(parsed);
+      saveSheetUrlToFirestore(state.sheetUrl);
 
       const newCount = Math.max(0, parsed.length - oldCount);
       showToast(newCount > 0 
-        ? `Synced ${parsed.length} responses (${newCount} new candidates)! ✓` 
-        : `Synced! All ${parsed.length} responses are up to date ✓`
+        ? `Synced ${parsed.length} responses (${newCount} new candidates uploaded to cloud)! ✓` 
+        : `Synced! All ${parsed.length} responses are up to date on cloud ✓`
       );
     } else {
       showToast('No candidate entries found in sheet');
@@ -818,7 +897,8 @@ function loadCSV(csvText) {
     if (parsed.length > 0) {
       state.excelCandidates = parsed;
       mergeCandidates();
-      showToast(`Loaded ${parsed.length} candidate responses`);
+      saveCandidatesToFirestore(parsed);
+      showToast(`Loaded ${parsed.length} candidate responses & uploaded to cloud`);
     }
   } catch (err) {
     showToast('Failed to parse CSV file');
@@ -1421,6 +1501,7 @@ function bindEvents() {
       }
       state.sheetUrl = url;
       saveLocalState();
+      saveSheetUrlToFirestore(url);
       closeSheetModal();
       syncGoogleSheetResponses(false);
     });
