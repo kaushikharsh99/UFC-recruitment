@@ -176,12 +176,6 @@ function initFirebase() {
         firebase.initializeApp(firebaseConfig);
       }
       db = firebase.firestore();
-
-      // Enable offline multi-tab persistence
-      db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
-        console.warn('Firestore persistence notice:', err.code);
-      });
-
       initFirestoreSync();
     } else {
       updateSyncIndicator('offline', 'Offline (Local Only)');
@@ -196,7 +190,9 @@ function initFirestoreSync() {
   if (!db) return;
   updateSyncIndicator('syncing', 'Connecting…');
 
+  // Real-time listener for candidate decisions and notes
   db.collection('decisions').onSnapshot((snapshot) => {
+    updateSyncIndicator('synced', 'Live Cloud Sync');
     snapshot.docChanges().forEach((change) => {
       const key = change.doc.id;
       const data = change.doc.data();
@@ -226,12 +222,10 @@ function initFirestoreSync() {
       }
     });
 
-    // Mirror to local cache for instant zero-latency loading on reload
     saveLocalState();
     updateCounts();
     applyFilters();
 
-    // If modal is open, refresh its decision status badge and notes (if not actively editing)
     if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
       const active = state.filtered[state.currentModalIndex];
       updateModalDecisionState(active);
@@ -244,8 +238,6 @@ function initFirestoreSync() {
         if (noteAuthorEl) noteAuthorEl.textContent = author && noteInput.value.trim() ? `(by ${author})` : '';
       }
     }
-
-    updateSyncIndicator('synced', 'Live Cloud Sync');
   }, (error) => {
     console.error('Firestore listener error:', error);
     updateSyncIndicator('error', 'Cloud Disconnected');
@@ -253,6 +245,7 @@ function initFirestoreSync() {
 
   // Real-time listener for Walk-in applicants registered via /register
   db.collection('walkin_responses').onSnapshot((snapshot) => {
+    updateSyncIndicator('synced', 'Live Cloud Sync');
     const list = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
@@ -280,7 +273,6 @@ function initFirestoreSync() {
       });
     });
 
-    // Notify for any new submissions that arrive during active session
     snapshot.docChanges().forEach((change) => {
       if (change.type === 'added') {
         const d = change.doc.data();
@@ -296,18 +288,39 @@ function initFirestoreSync() {
     console.warn('Walk-in listener notice:', err);
   });
 
-  // Real-time listener for candidates synced from Google Sheets across devices
+  // Real-time listener for candidate responses in Firestore (Google Sheet applicants)
   db.collection('candidates').onSnapshot((snapshot) => {
+    updateSyncIndicator('synced', 'Live Cloud Sync');
     if (!snapshot.empty) {
       const cloudCandidates = [];
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data && data.name) {
-          cloudCandidates.push(data);
+          cloudCandidates.push({
+            id: Number(data.id) || doc.id,
+            timestamp: data.timestamp || '',
+            email: data.email || '',
+            name: data.name || '',
+            phone: data.phone || '',
+            rollNo: data.rollNo || '',
+            branch: data.branch || '',
+            year: data.year || '',
+            github: data.github || '',
+            linkedin: data.linkedin || '',
+            fossMeaning: data.fossMeaning || '',
+            contributed: data.contributed || '',
+            contributions: data.contributions || '',
+            admiredTool: data.admiredTool || '',
+            domains: data.domains || '',
+            techStack: data.techStack || '',
+            whyJoin: data.whyJoin || '',
+            otherInfo: data.otherInfo || '',
+            isWalkin: false
+          });
         }
       });
       if (cloudCandidates.length > 0) {
-        // Retain any existing parsed order or sort by timestamp/id
+        cloudCandidates.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
         state.excelCandidates = cloudCandidates;
         mergeCandidates();
       }
@@ -760,13 +773,10 @@ function initData() {
     })
     .catch(() => {});
 
-  if (state.sheetUrl) {
-    // If live Google Sheet is connected, sync from live sheet
-    syncGoogleSheetResponses(false);
-  } else if (window.INITIAL_RESPONSES && Array.isArray(window.INITIAL_RESPONSES) && window.INITIAL_RESPONSES.length > 0) {
-    state.excelCandidates = window.INITIAL_RESPONSES;
-    mergeCandidates();
-  } else {
+  // If Firebase is available, candidate responses and walk-ins are streamed
+  // live directly from Firebase Cloud Firestore (see initFirestoreSync).
+  // Offline fallback only: if Firebase SDK is not present or offline, load local CSV.
+  if (typeof firebase === 'undefined') {
     fetch('UFC FOSS Recruitment Form (Responses) - Form responses 1.csv')
       .then(res => res.text())
       .then(csv => {
