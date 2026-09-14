@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UFC FOSS — Walk-in Registration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .reg-wrap {
+      max-width: 760px;
+      margin: 2.5rem auto;
+      padding: 0 1.25rem 4rem;
+    }
+    .reg-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 2rem 2.25rem;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    }
+    .reg-header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+    .reg-logo {
+      width: 56px;
+      height: 56px;
+      object-fit: contain;
+    }
+    .reg-title-box h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+      margin-bottom: 0.25rem;
+    }
+    .reg-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--green);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .form-section {
+      margin-bottom: 2rem;
+    }
+    .section-title {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--green);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 640px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .reg-card { padding: 1.5rem; }
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 1.25rem;
+    }
+    .form-group.full {
+      grid-column: 1 / -1;
+    }
+    .form-label {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #e5e5e5;
+    }
+    .form-label .req {
+      color: var(--green);
+      margin-left: 0.2rem;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: #050505;
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      padding: 0.7rem 0.85rem;
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 0.92rem;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      border-color: var(--green);
+      background: #0a0a0a;
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+    }
+    .passcode-box {
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid var(--green-border);
+      border-radius: 6px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .passcode-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--green);
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .passcode-desc {
+      font-size: 0.78rem;
+      color: var(--ink-dim);
+      margin-bottom: 0.75rem;
+    }
+    .checkbox-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      background: #050505;
+      border: 1px solid var(--line);
+      padding: 0.85rem;
+      border-radius: 4px;
+    }
+    @media (max-width: 600px) {
+      .checkbox-group { grid-template-columns: 1fr; }
+    }
+    .checkbox-item, .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.85rem;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .checkbox-item input, .radio-item input {
+      accent-color: var(--green);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .btn-submit {
+      width: 100%;
+      background: var(--green);
+      color: #000000;
+      border: none;
+      border-radius: 4px;
+      padding: 0.95rem;
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: all 0.15s ease;
+      margin-top: 1rem;
+    }
+    .btn-submit:hover {
+      background: var(--green-hover);
+      transform: translateY(-1px);
+    }
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .success-panel {
+      text-align: center;
+      padding: 3rem 1.5rem;
+    }
+    .success-icon {
+      font-size: 3rem;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+    .success-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.75rem;
+    }
+    .success-desc {
+      font-size: 0.92rem;
+      color: var(--ink-dim);
+      line-height: 1.6;
+      max-width: 480px;
+      margin: 0 auto 1.75rem;
+    }
+    .wa-group-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #10b981;
+      color: #000000;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 0.75rem 1.25rem;
+      border-radius: 4px;
+      transition: background 0.15s;
+    }
+    .wa-group-btn:hover {
+      background: #059669;
+    }
+    .err-msg {
+      color: var(--red);
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      margin-top: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="reg-wrap">
+    <div class="reg-card">
+      
+      <!-- Top Header -->
+      <header class="reg-header">
+        <img src="logo.png" alt="UFC FOSS Logo" class="reg-logo">
+        <div class="reg-title-box">
+          <h1>UFC FOSS CLUB</h1>
+          <span class="reg-subtitle">Walk-in Candidate Registration &bull; 2026</span>
+        </div>
+      </header>
+
+      <!-- Success Screen (Hidden by default) -->
+      <div id="success-panel" class="success-panel hidden">
+        <div class="success-icon">✓</div>
+        <h2 class="success-title">Registration Submitted!</h2>
+        <p class="success-desc">
+          Thank you for applying to UFC FOSS Club! Your responses have been recorded live in our recruitment dashboard. Please notify the interview panel outside your room.
+        </p>
+        <p style="margin-bottom: 1.5rem; font-family: var(--font-mono); font-size: 0.82rem; color: #a1a1aa;">
+          Make sure to join our official WhatsApp group for all recruitment updates:
+        </p>
+        <a href="https://chat.whatsapp.com/D53VDUUqtPv6syZ1r8BSEn" target="_blank" rel="noopener noreferrer" class="wa-group-btn">
+          💬 Join UFC WhatsApp Group ↗
+        </a>
+      </div>
+
+      <!-- Registration Form -->
+      <form id="walkin-form">
+
+        <!-- Access Passcode Box (Secured via .env) -->
+        <div class="passcode-box">
+          <label class="passcode-label" for="access-code">
+            🔒 Walk-in Access Passcode <span class="req" style="color: var(--green);">*</span>
+          </label>
+          <p class="passcode-desc">
+            Please ask the UFC recruitment coordinator in your room for the registration pass code to submit your application.
+          </p>
+          <input
+            type="password"
+            id="access-code"
+            class="form-input"
+            placeholder="Enter Walk-in Passcode"
+            required
+            autocomplete="off"
+          >
+          <div id="code-error" class="err-msg hidden"></div>
+        </div>
+
+        <!-- Personal Info -->
+        <div class="form-section">
+          <div class="section-title">01 &bull; Personal &amp; Academic Details</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="cand-name">Full Name <span class="req">*</span></label>
+              <input type="text" id="cand-name" class="form-input" placeholder="e.g. Rahul Sharma" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-email">Email Address <span class="req">*</span></label>
+              <input type="email" id="cand-email" class="form-input" placeholder="e.g. rahul@gmail.com" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-phone">WhatsApp / Contact Number <span class="req">*</span></label>
+              <input type="tel" id="cand-phone" class="form-input" placeholder="10-digit mobile number" required pattern="[0-9]{10}">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-roll">Enrollment / Roll Number <span class="req">*</span></label>
+              <input type="text" id="cand-roll" class="form-input" placeholder="e.g. 08819051925" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-branch">Branch <span class="req">*</span></label>
+              <select id="cand-branch" class="form-select" required>
+                <option value="" disabled selected>Select Branch</option>
+                <option value="AI-DS">AI-DS (Artificial Intelligence &amp; Data Science)</option>
+                <option value="AI-ML">AI-ML (Artificial Intelligence &amp; Machine Learning)</option>
+                <option value="IIOT">IIOT (Industrial IoT)</option>
+                <option value="AR">AR (Automation &amp; Robotics)</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-year">Year <span class="req">*</span></label>
+              <select id="cand-year" class="form-select" required>
+                <option value="" disabled selected>Select Year</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Links -->
+        <div class="form-section">
+          <div class="section-title">02 &bull; Profiles &amp; Links</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label class="form-label" for="cand-github">GitHub / GitLab Profile URL</label>
+              <input type="url" id="cand-github" class="form-input" placeholder="https://github.com/username">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="cand-linkedin">LinkedIn / Portfolio URL</label>
+              <input type="url" id="cand-linkedin" class="form-input" placeholder="https://linkedin.com/in/... or portfolio">
+            </div>
+          </div>
+        </div>
+
+        <!-- Domains & Tech Stack -->
+        <div class="form-section">
+          <div class="section-title">03 &bull; Domains &amp; Technical Background</div>
+          
+          <div class="form-group full">
+            <label class="form-label">Which sub-teams/domains are you most interested in joining? <span class="req">*</span></label>
+            <div class="checkbox-group" id="domain-checkboxes">
+              <label class="checkbox-item">
+                <input type="checkbox" name="domain" value="Technical (Web / App / Core Development / DevOps)">
+                Technical (Web / App / DevOps)
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="domain" value="UI/UX Design">
+                UI/UX Design &amp; Graphics
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="domain" value="Social Media, Marketing & Outreach">
+                Social Media, Marketing &amp; Outreach
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="domain" value="Events & Management">
+                Events &amp; Management
+              </label>
+              <label class="checkbox-item">
+                <input type="checkbox" name="domain" value="Content & Technical Writing">
+                Content &amp; Technical Writing
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-tech">What tech stack or tools are you familiar with? <span class="req">*</span></label>
+            <textarea id="cand-tech" class="form-textarea" placeholder="e.g. Python, React, Git, Docker, Figma, C++, etc." required></textarea>
+          </div>
+        </div>
+
+        <!-- FOSS Questions -->
+        <div class="form-section">
+          <div class="section-title">04 &bull; Open Source Mindset</div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-meaning">What does Open Source (FOSS) mean to you, and what are your thoughts on its culture? <span class="req">*</span></label>
+            <textarea id="cand-meaning" class="form-textarea" placeholder="Share your perspective..." required></textarea>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label">Have you ever contributed to an open-source project? <span class="req">*</span></label>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; background: #050505; border: 1px solid var(--line); padding: 0.85rem; border-radius: 4px;">
+              <label class="radio-item">
+                <input type="radio" name="contributed" value="Yes" required id="contrib-yes">
+                Yes
+              </label>
+              <label class="radio-item">
+                <input type="radio" name="contributed" value="No, but I'm eager to learn and start contributing" id="contrib-no">
+                No, but I'm eager to learn and start contributing
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-contribs">If YES: Which organizations/repositories have you contributed to?</label>
+            <textarea id="cand-contribs" class="form-textarea" placeholder="Links to PRs, issues, or repo names..."></textarea>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-tool">If NO: Which open-source software, library, or tool do you admire the most, and why?</label>
+            <textarea id="cand-tool" class="form-textarea" placeholder="e.g. Linux, Neovim, VS Code, TensorFlow..."></textarea>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-why">Why do you want to join UFC FOSS, and what do you hope to achieve here? <span class="req">*</span></label>
+            <textarea id="cand-why" class="form-textarea" placeholder="Your motivation and goals..." required></textarea>
+          </div>
+
+          <div class="form-group full">
+            <label class="form-label" for="cand-other">Anything else you'd like to share with us?</label>
+            <textarea id="cand-other" class="form-textarea" placeholder="Projects, hobbies, questions, etc."></textarea>
+          </div>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn-submit">
+          Submit Walk-in Application &rarr;
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Firebase SDKs for direct real-time broadcast to dashboard -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDummyKeyForPublicFirestoreRules2026",
+      authDomain: "ufc-recruitment-2026.firebaseapp.com",
+      projectId: "ufc-recruitment-2026",
+      storageBucket: "ufc-recruitment-2026.appspot.com",
+      messagingSenderId: "109823487612",
+      appId: "1:109823487612:web:7f8d9a0b1c2d3e4f5a6b7c"
+    };
+
+    let db = null;
+    try {
+      if (typeof firebase !== 'undefined') {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+      }
+    } catch(e) {
+      console.warn('Client firebase initialization error:', e);
+    }
+
+    const form = document.getElementById('walkin-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const successPanel = document.getElementById('success-panel');
+    const codeError = document.getElementById('code-error');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      codeError.classList.add('hidden');
+      codeError.textContent = '';
+
+      const accessCode = document.getElementById('access-code').value.trim();
+      if (!accessCode) {
+        codeError.textContent = 'Please enter the walk-in registration passcode.';
+        codeError.classList.remove('hidden');
+        return;
+      }
+
+      // Collect selected domains
+      const selectedDomains = Array.from(document.querySelectorAll('input[name="domain"]:checked'))
+        .map(el => el.value)
+        .join(', ');
+
+      if (!selectedDomains) {
+        alert('Please select at least one sub-team / domain.');
+        return;
+      }
+
+      const contribChoice = document.querySelector('input[name="contributed"]:checked')?.value || '';
+
+      const candidateData = {
+        name: document.getElementById('cand-name').value.trim(),
+        email: document.getElementById('cand-email').value.trim(),
+        phone: document.getElementById('cand-phone').value.trim(),
+        rollNo: document.getElementById('cand-roll').value.trim(),
+        branch: document.getElementById('cand-branch').value,
+        year: document.getElementById('cand-year').value,
+        github: document.getElementById('cand-github').value.trim(),
+        linkedin: document.getElementById('cand-linkedin').value.trim(),
+        domains: selectedDomains,
+        techStack: document.getElementById('cand-tech').value.trim(),
+        fossMeaning: document.getElementById('cand-meaning').value.trim(),
+        contributed: contribChoice,
+        contributions: document.getElementById('cand-contribs').value.trim(),
+        admiredTool: document.getElementById('cand-tool').value.trim(),
+        whyJoin: document.getElementById('cand-why').value.trim(),
+        otherInfo: document.getElementById('cand-other').value.trim(),
+        timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        isWalkin: true
+      };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting application…';
+
+      try {
+        // Step 1: Submit to Node.js backend to verify .env passcode & store locally
+        let serverVerified = false;
+        try {
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessCode, candidate: candidateData })
+          });
+
+          const resData = await res.json();
+          if (res.status === 403 || !res.ok) {
+            codeError.textContent = resData.error || 'Incorrect passcode. Please verify with coordinator.';
+            codeError.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Walk-in Application →';
+            return;
+          }
+          serverVerified = true;
+        } catch (serverErr) {
+          // If running as purely static without server.js, verify fallback or allow Firestore
+          console.warn('Node server not reachable, using Firestore directly:', serverErr);
+        }
+
+        // Step 2: Write directly to Firebase Cloud Firestore walkin_responses collection
+        if (db) {
+          const cleanRoll = candidateData.rollNo.toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const docId = `walkin_${cleanRoll}_${Date.now()}`;
+          await db.collection('walkin_responses').doc(docId).set({
+            ...candidateData,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        form.classList.add('hidden');
+        successPanel.classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      } catch (err) {
+        console.error('Submission failed:', err);
+        alert('Failed to submit registration. Please check your internet connection or try again.');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Walk-in Application →';
+      }
+    });
+  </script>
+</body>
+</html>

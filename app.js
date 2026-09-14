@@ -28,53 +28,16 @@ const state = {
   notes: {}, // { [key]: candidateNote }
   noteAuthors: {}, // { [key]: noteAuthorName }
   reviewerName: 'Reviewer',
-  theme: 'dark', // 'dark' | 'light'
   sheetUrl: '',
   currentModalIndex: -1
 };
 
 document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
-  initTheme();
   initData();
   bindEvents();
   initFirebase();
 });
-
-/**
- * --------------------------------------------------------------------------
- * Theme Management (Light / Dark Mode)
- * --------------------------------------------------------------------------
- */
-function initTheme() {
-  setTheme(state.theme);
-}
-
-function setTheme(theme) {
-  state.theme = theme;
-  const icon = document.getElementById('theme-icon');
-  const text = document.getElementById('theme-text');
-
-  if (theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-    if (icon) icon.textContent = '🌙';
-    if (text) text.textContent = 'Dark';
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-    if (icon) icon.textContent = '☀️';
-    if (text) text.textContent = 'Light';
-  }
-
-  try {
-    localStorage.setItem('ufc_theme', theme);
-  } catch (e) {}
-}
-
-function toggleTheme() {
-  const next = state.theme === 'light' ? 'dark' : 'light';
-  setTheme(next);
-  showToast(`Switched to ${next === 'light' ? 'Light ☀️' : 'Dark 🌙'} mode`);
-}
 
 /**
  * --------------------------------------------------------------------------
@@ -162,6 +125,51 @@ function initFirestoreSync() {
     console.error('Firestore listener error:', error);
     updateSyncIndicator('error', 'Cloud Disconnected');
   });
+
+  // Real-time listener for Walk-in applicants registered via /register
+  db.collection('walkin_responses').onSnapshot((snapshot) => {
+    let hasNew = false;
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === 'added') {
+        const data = change.doc.data();
+        const cleanRoll = (data.rollNo || '').trim().toLowerCase();
+        const exists = state.candidates.some(c => (c.rollNo || '').trim().toLowerCase() === cleanRoll);
+        if (!exists) {
+          const walkinCandidate = {
+            id: change.doc.id,
+            timestamp: data.timestamp || '',
+            email: data.email || '',
+            name: data.name || 'Walk-in Applicant',
+            phone: data.phone || '',
+            rollNo: data.rollNo || '',
+            branch: data.branch || '',
+            year: data.year || '',
+            github: data.github || '',
+            linkedin: data.linkedin || '',
+            fossMeaning: data.fossMeaning || '',
+            contributed: data.contributed || '',
+            contributions: data.contributions || '',
+            admiredTool: data.admiredTool || '',
+            domains: data.domains || '',
+            techStack: data.techStack || '',
+            whyJoin: data.whyJoin || '',
+            otherInfo: data.otherInfo || '',
+            isWalkin: true
+          };
+          state.candidates.unshift(walkinCandidate);
+          hasNew = true;
+          showToast(`🔔 New Walk-in: ${data.name} (${data.branch || 'Registered'})`);
+        }
+      }
+    });
+
+    if (hasNew) {
+      updateCounts();
+      applyFilters();
+    }
+  }, (err) => {
+    console.warn('Walk-in listener notice:', err);
+  });
 }
 
 function updateSyncIndicator(status, text) {
@@ -200,10 +208,6 @@ function loadLocalState() {
     if (savedReviewer && savedReviewer.trim()) {
       state.reviewerName = savedReviewer.trim();
     }
-    const savedTheme = localStorage.getItem('ufc_theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      state.theme = savedTheme;
-    }
     const savedSheetUrl = localStorage.getItem('ufc_sheet_url');
     if (savedSheetUrl) {
       state.sheetUrl = savedSheetUrl;
@@ -221,7 +225,6 @@ function saveLocalState() {
     localStorage.setItem('ufc_recruitment_note_authors', JSON.stringify(state.noteAuthors));
     localStorage.setItem('ufc_recruitment_tab', state.filterStatus);
     localStorage.setItem('ufc_reviewer_name', state.reviewerName);
-    localStorage.setItem('ufc_theme', state.theme);
     localStorage.setItem('ufc_sheet_url', state.sheetUrl);
   } catch (e) {
     console.error('Error saving localStorage cache:', e);
@@ -693,13 +696,74 @@ function loadCSV(csvText) {
 function cleanUrl(url) {
   if (!url || typeof url !== 'string') return '';
   let cleaned = url.trim();
-  if (!cleaned || cleaned.toLowerCase() === 'no' || cleaned.toLowerCase() === 'none' || cleaned === '—' || cleaned === '-') {
+  const lower = cleaned.toLowerCase();
+  if (
+    !cleaned ||
+    lower === 'no' ||
+    lower === 'none' ||
+    lower === '—' ||
+    lower === '-' ||
+    lower === 'na' ||
+    lower === 'n/a' ||
+    lower === 'nil' ||
+    lower === 'null' ||
+    lower === 'nothing' ||
+    lower === 'not yet' ||
+    lower === 'dont have' ||
+    lower === "don't have"
+  ) {
     return '';
   }
   if (!/^https?:\/\//i.test(cleaned)) {
     cleaned = 'https://' + cleaned;
   }
   return cleaned;
+}
+
+function resolveCandidateLinks(c) {
+  const cleanDigits = (c.phone || '').replace(/[^0-9]/g, '');
+  const waPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+
+  const email = (c.email || '').trim();
+  const validEmail = email.includes('@') ? email : '';
+
+  let githubUrl = cleanUrl(c.github);
+  let linkedinUrl = '';
+  let portfolioUrl = '';
+
+  const rawSocial = (c.linkedin || '').trim();
+  if (rawSocial) {
+    const tokens = rawSocial.split(/[\s,;\n|]+/).map(t => cleanUrl(t)).filter(Boolean);
+    tokens.forEach(url => {
+      if (/linkedin\.com/i.test(url)) {
+        if (!linkedinUrl) linkedinUrl = url;
+      } else if (/github\.com/i.test(url) || /gitlab\.com/i.test(url)) {
+        if (!githubUrl) githubUrl = url;
+      } else {
+        if (!portfolioUrl) portfolioUrl = url;
+      }
+    });
+
+    if (!linkedinUrl && !portfolioUrl) {
+      const single = cleanUrl(rawSocial);
+      if (single) {
+        if (/linkedin\.com/i.test(single)) {
+          linkedinUrl = single;
+        } else {
+          portfolioUrl = single;
+        }
+      }
+    }
+  }
+
+  return {
+    phone: c.phone || '',
+    waPhone: waPhone.length >= 10 ? waPhone : '',
+    email: validEmail,
+    githubUrl,
+    linkedinUrl,
+    portfolioUrl
+  };
 }
 
 function escapeHtml(str) {
@@ -829,18 +893,20 @@ function renderTiles() {
             ${c.branch ? `<span class="badge badge-branch">${highlight(c.branch, q)}</span>` : ''}
             ${c.year ? `<span class="badge badge-year">${highlight(c.year, q)}</span>` : ''}
             ${c.rollNo ? `<span class="badge badge-roll tag-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy roll number">Roll: ${highlight(c.rollNo, q)}</span>` : ''}
+            ${c.isWalkin ? '<span class="badge badge-walkin">Walk-in</span>' : ''}
             <span class="badge ${isContributor ? 'badge-contrib' : 'badge-learn'}">${isContributor ? 'Open Source Contributor' : 'Eager to learn'}</span>
           </div>
 
-          <div class="tile-actions" onclick="event.stopPropagation()">
-            ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="tile-link-wa">WhatsApp ↗</a>` : ''}
-            <button class="btn-tile-reject ${decision === 'rejected' ? 'active' : ''}" data-decision="rejected" data-id="${c.id}" title="Reject candidate">
-              ✕ Reject
-            </button>
-            <button class="btn-tile-select ${decision === 'selected' ? 'active' : ''}" data-decision="selected" data-id="${c.id}" title="Select candidate">
-              ✓ Select
-            </button>
-          </div>
+          ${decision === 'pending' ? `
+            <div class="tile-actions" onclick="event.stopPropagation()">
+              <button class="btn-tile-reject" data-decision="rejected" data-id="${c.id}" title="Reject candidate">
+                ✕ Reject
+              </button>
+              <button class="btn-tile-select" data-decision="selected" data-id="${c.id}" title="Select candidate">
+                ✓ Select
+              </button>
+            </div>
+          ` : ''}
         </div>
 
         <!-- Secondary Row: Tech Stack, Feedback Preview & View Indicator -->
@@ -892,10 +958,7 @@ function openCandidateModal(index) {
   const isContributor = (c.contributed || '').toLowerCase().startsWith('yes');
   const q = state.query.trim();
 
-  const githubUrl = cleanUrl(c.github);
-  const linkedinUrl = cleanUrl(c.linkedin);
-  const cleanDigits = (c.phone || '').replace(/[^0-9]/g, '');
-  const waPhone = cleanDigits.length === 10 ? `91${cleanDigits}` : cleanDigits;
+  const links = resolveCandidateLinks(c);
 
   // Header Elements
   document.getElementById('modal-name').textContent = c.name;
@@ -906,6 +969,7 @@ function openCandidateModal(index) {
     ${c.branch ? `<span class="badge badge-branch">${escapeHtml(c.branch)}</span>` : ''}
     ${c.year ? `<span class="badge badge-year">${escapeHtml(c.year)}</span>` : ''}
     ${c.rollNo ? `<span class="badge badge-roll tag-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy">Roll: ${escapeHtml(c.rollNo)}</span>` : ''}
+    ${c.isWalkin ? '<span class="badge badge-walkin">Walk-in</span>' : ''}
     <span class="badge ${isContributor ? 'badge-contrib' : 'badge-learn'}">${isContributor ? 'Open Source Contributor' : 'Eager to learn'}</span>
     ${c.timestamp ? `<span class="mono" style="font-size: 0.7rem; color: var(--ink-faint); margin-left: 0.4rem;">${escapeHtml(c.timestamp)}</span>` : ''}
   `;
@@ -913,13 +977,24 @@ function openCandidateModal(index) {
   // Update Status Badge and Decision Buttons
   updateModalDecisionState(c);
 
-  // Quick Links
+  // Quick Links: Clean white and green aesthetic
   const linksEl = document.getElementById('modal-links');
   linksEl.innerHTML = `
-    ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="link-wa">WhatsApp (${escapeHtml(c.phone)}) ↗</a>` : '<span class="unanswered">No Phone</span>'}
-    ${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : '<span class="unanswered">No Email</span>'}
-    ${githubUrl ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>` : '<span class="unanswered">No GitHub</span>'}
-    ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>` : '<span class="unanswered">No Portfolio</span>'}
+    ${links.waPhone 
+      ? `<a href="https://wa.me/${links.waPhone}" target="_blank" rel="noopener noreferrer" class="link-wa">WhatsApp (${escapeHtml(links.phone)}) ↗</a>` 
+      : '<span class="link-empty">No WhatsApp</span>'}
+    ${links.email 
+      ? `<a href="mailto:${escapeHtml(links.email)}">${escapeHtml(links.email)} ↗</a>` 
+      : '<span class="link-empty">No Email</span>'}
+    ${links.githubUrl 
+      ? `<a href="${links.githubUrl}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>` 
+      : '<span class="link-empty">No GitHub</span>'}
+    ${links.linkedinUrl 
+      ? `<a href="${links.linkedinUrl}" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a>` 
+      : '<span class="link-empty">No LinkedIn</span>'}
+    ${links.portfolioUrl 
+      ? `<a href="${links.portfolioUrl}" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>` 
+      : '<span class="link-empty">No Portfolio</span>'}
   `;
 
   // All 8 Actual Questions
@@ -1166,19 +1241,12 @@ function showToast(msg) {
 function bindEvents() {
   const searchInput = document.getElementById('search-input');
   const clearBtn = document.getElementById('clear-search');
-  const fileInput = document.getElementById('csv-file-input');
   const container = document.getElementById('cards-container');
   const exportBtn = document.getElementById('export-selected-btn');
   const reviewerInput = document.getElementById('reviewer-name-input');
   const resetBtn = document.getElementById('reset-decisions-btn');
   const noteInput = document.getElementById('modal-note-input');
-  const themeBtn = document.getElementById('theme-toggle-btn');
   const syncSheetBtn = document.getElementById('sync-sheet-btn');
-
-  // Theme Toggle Button
-  if (themeBtn) {
-    themeBtn.addEventListener('click', toggleTheme);
-  }
 
   // Google Sheet Sync Button
   if (syncSheetBtn) {

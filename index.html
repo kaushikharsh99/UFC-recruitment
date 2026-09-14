@@ -32,9 +32,9 @@
           <span class="reviewer-label">Reviewer:</span>
           <input type="text" id="reviewer-name-input" class="reviewer-input" placeholder="Your Name" maxlength="20" spellcheck="false">
         </div>
-        <button id="theme-toggle-btn" class="btn-action btn-theme" title="Toggle Light / Dark mode">
-          <span id="theme-icon">☀️</span> <span id="theme-text">Light</span>
-        </button>
+        <a href="register.html" target="_blank" class="btn-action" title="Open Walk-in Candidate Registration Form (for applicants in the room)">
+          📝 Walk-in Form ↗
+        </a>
         <button id="sync-sheet-btn" class="btn-action btn-sync-form" title="Import live responses from linked Google Form / Sheet">
           ↻ Sync Form
         </button>
@@ -44,10 +44,6 @@
         <button id="export-selected-btn" class="btn-action btn-export" title="Export selected candidates to CSV">
           Export Selected (<span id="export-count">0</span>)
         </button>
-        <label class="btn-action btn-import" for="csv-file-input" title="Import updated CSV from Google Forms">
-          + Import CSV
-        </label>
-        <input type="file" id="csv-file-input" accept=".csv" hidden>
       </div>
     </header>
 

@@ -4,3 +4,7 @@
 *~
 .vscode/
 .idea/
+node_modules/
+.env
+.env.local
+walkin_responses.json

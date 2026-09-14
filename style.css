@@ -46,36 +46,6 @@
   --font-mono: 'IBM Plex Mono', monospace;
 }
 
-[data-theme="light"] {
-  --bg: #f8fafc;
-  --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
-  --bg-input: #ffffff;
-  --bg-modal: #ffffff;
-  --bg-subtle: #f8fafc;
-  --bg-badge: #f1f5f9;
-
-  --green: #059669;
-  --green-hover: #047857;
-  --green-subtle: rgba(5, 150, 105, 0.08);
-  --green-border: rgba(5, 150, 105, 0.35);
-
-  --red: #dc2626;
-  --red-hover: #b91c1c;
-  --red-subtle: rgba(220, 38, 38, 0.08);
-  --red-border: rgba(220, 38, 38, 0.35);
-
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
-  --ink: #0f172a;
-  --ink-dim: #475569;
-  --ink-faint: #94a3b8;
-
-  --modal-backdrop: rgba(15, 23, 42, 0.6);
-  --modal-shadow: 0 20px 50px rgba(15, 23, 42, 0.16);
-  --selection-color: #ffffff;
-}
-
 body {
   background: var(--bg);
   color: var(--ink);
@@ -287,15 +257,6 @@ body {
 }
 
 .btn-action:hover {
-  border-color: var(--line-strong);
-}
-
-/* Theme Toggle Button */
-.btn-theme {
-  color: var(--ink-dim);
-}
-.btn-theme:hover {
-  color: var(--ink);
   border-color: var(--line-strong);
 }
 
@@ -563,6 +524,13 @@ body {
 .badge-contrib {
   color: var(--green);
   border-color: var(--green-border);
+}
+
+.badge-walkin {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+  font-weight: 600;
 }
 
 .badge-learn {
@@ -857,10 +825,10 @@ mark.match {
 .modal-links {
   display: flex;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1.15rem;
   flex-wrap: wrap;
-  padding: 0.65rem 0.9rem;
-  background: var(--bg-subtle);
+  padding: 0.65rem 0.95rem;
+  background: #080808;
   border: 1px solid var(--line);
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -868,7 +836,7 @@ mark.match {
 }
 
 .modal-links a {
-  color: var(--ink);
+  color: #f4f4f5;
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: color 0.15s, border-bottom-color 0.15s;
@@ -886,6 +854,13 @@ mark.match {
 }
 .modal-links a.link-wa:hover {
   border-bottom-color: var(--green);
+}
+
+.modal-links .link-empty {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  user-select: none;
 }
 
 /* Modal Interviewer Notes & Feedback Section */
