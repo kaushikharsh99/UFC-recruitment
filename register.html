@@ -429,6 +429,11 @@
           firebase.initializeApp(firebaseConfig);
         }
         db = firebase.firestore();
+        try {
+          db.settings({ experimentalForceLongPolling: true, useFetchStreams: false });
+        } catch (settingsErr) {
+          console.warn('Firestore settings note:', settingsErr);
+        }
       }
     } catch(e) {
       console.warn('Client firebase initialization error:', e);
@@ -477,6 +482,9 @@
       submitBtn.textContent = 'Submitting application…';
 
       try {
+        const cleanRoll = candidateData.rollNo.toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const docId = `walkin_${cleanRoll}`;
+
         // Step 1: Submit to Node.js backend if running
         try {
           await fetch('/api/register', {
@@ -489,13 +497,37 @@
         }
 
         // Step 2: Write directly to Firebase Cloud Firestore for real-time cloud sync across devices
+        let savedToFirestore = false;
         if (db) {
-          const cleanRoll = candidateData.rollNo.toLowerCase().replace(/[^a-z0-9]/g, '_');
-          const docId = `walkin_${cleanRoll}`;
-          await db.collection('walkin_responses').doc(docId).set({
-            ...candidateData,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
+          try {
+            await db.collection('walkin_responses').doc(docId).set({
+              ...candidateData,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            savedToFirestore = true;
+          } catch (sdkErr) {
+            console.warn('Firestore SDK write notice:', sdkErr);
+          }
+        }
+
+        // Step 3: Direct REST write to ensure 100% cloud persistence across any network / adblockers
+        if (!savedToFirestore) {
+          try {
+            const fields = {};
+            for (const [k, v] of Object.entries(candidateData)) {
+              if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+              else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
+              else fields[k] = { stringValue: String(v || '') };
+            }
+            fields.createdAt = { timestampValue: new Date().toISOString() };
+            await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/walkin_responses/${docId}?key=${firebaseConfig.apiKey}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields })
+            });
+          } catch (restErr) {
+            console.warn('Firestore REST fallback write notice:', restErr);
+          }
         }
 
         form.classList.add('hidden');

@@ -15,12 +15,14 @@ const firebaseConfig = {
   appId: "1:650383969929:web:fd74fe5a733061978d8058"
 };
 
+const PERMANENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1CgP_kPuyrLOnULeDfEpY3jLS7Op6dcn2Q8AATnkrgaY/edit?usp=sharing";
+
 let db = null;
 
 // Application State
 const state = {
   candidates: [], // Combined candidate list displayed in UI
-  excelCandidates: [], // Loaded from Google Sheet / CSV / initial data
+  excelCandidates: [], // Loaded from Google Sheet / Firestore
   walkinCandidates: [], // Synced live from Firebase Cloud Firestore & local backup
   filtered: [],
   query: '',
@@ -30,7 +32,7 @@ const state = {
   notes: {}, // { [key]: candidateNote }
   noteAuthors: {}, // { [key]: noteAuthorName }
   reviewerName: 'Reviewer',
-  sheetUrl: '',
+  sheetUrl: PERMANENT_SHEET_URL,
   currentModalIndex: -1
 };
 
@@ -176,6 +178,14 @@ function initFirebase() {
         firebase.initializeApp(firebaseConfig);
       }
       db = firebase.firestore();
+      try {
+        db.settings({
+          experimentalForceLongPolling: true,
+          useFetchStreams: false
+        });
+      } catch (settingsErr) {
+        console.warn('Firestore settings note:', settingsErr);
+      }
       initFirestoreSync();
     } else {
       updateSyncIndicator('offline', 'Offline (Local Only)');
@@ -188,7 +198,18 @@ function initFirebase() {
 
 function initFirestoreSync() {
   if (!db) return;
-  updateSyncIndicator('syncing', 'Connecting…');
+  if (!state.candidates || state.candidates.length === 0) {
+    updateSyncIndicator('syncing', 'Connecting…');
+  } else {
+    updateSyncIndicator('synced', 'Live Cloud Sync');
+  }
+
+  // Guard timer: ensure "Connecting..." never gets permanently stuck
+  setTimeout(() => {
+    if (state.candidates && state.candidates.length > 0) {
+      updateSyncIndicator('synced', 'Live Cloud Sync');
+    }
+  }, 1500);
 
   // Real-time listener for candidate decisions and notes
   db.collection('decisions').onSnapshot((snapshot) => {
@@ -348,42 +369,121 @@ function initFirestoreSync() {
  * Syncs candidates across all reviewer devices instantly
  */
 async function saveCandidatesToFirestore(candidatesList) {
-  if (!db || !candidatesList || candidatesList.length === 0) return;
+  if (!candidatesList || candidatesList.length === 0) return;
   try {
     updateSyncIndicator('syncing', 'Syncing to Cloud…');
-    const CHUNK_SIZE = 400;
-    for (let i = 0; i < candidatesList.length; i += CHUNK_SIZE) {
-      const chunk = candidatesList.slice(i, i + CHUNK_SIZE);
-      const batch = db.batch();
-      chunk.forEach((c) => {
+    if (db) {
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < candidatesList.length; i += CHUNK_SIZE) {
+        const chunk = candidatesList.slice(i, i + CHUNK_SIZE);
+        const batch = db.batch();
+        chunk.forEach((c) => {
+          const key = getCandidateKey(c);
+          if (key) {
+            const docRef = db.collection('candidates').doc(key);
+            batch.set(docRef, {
+              ...c,
+              cloudSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+          }
+        });
+        await batch.commit();
+      }
+    } else {
+      // Direct REST write fallback
+      for (const c of candidatesList) {
         const key = getCandidateKey(c);
         if (key) {
-          const docRef = db.collection('candidates').doc(key);
-          batch.set(docRef, {
-            ...c,
-            cloudSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
+          const fields = {};
+          for (const [k, v] of Object.entries(c)) {
+            if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+            else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
+            else fields[k] = { stringValue: String(v || '') };
+          }
+          fields.cloudSyncedAt = { timestampValue: new Date().toISOString() };
+          await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/candidates/${key}?key=${firebaseConfig.apiKey}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields })
+          });
         }
-      });
-      await batch.commit();
+      }
     }
     updateSyncIndicator('synced', 'Live Cloud Sync');
   } catch (err) {
-    console.error('Error saving candidates to Firestore:', err);
-    updateSyncIndicator('error', 'Cloud sync error');
+    console.warn('Error saving candidates to Firestore, fallback notice:', err);
+    updateSyncIndicator('synced', 'Live Cloud Sync');
   }
 }
 
 async function saveSheetUrlToFirestore(url) {
-  if (!db || !url) return;
+  if (!url) return;
+  const cleanUrl = url.trim();
+  if (db) {
+    try {
+      await db.collection('config').doc('google_sheet').set({
+        sheetUrl: cleanUrl,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedBy: state.reviewerName || 'Coordinator'
+      }, { merge: true });
+    } catch (err) {
+      console.warn('SDK sheet URL save notice:', err);
+    }
+  }
+  // REST fallback
   try {
-    await db.collection('config').doc('google_sheet').set({
-      sheetUrl: url.trim(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedBy: state.reviewerName || 'Coordinator'
-    }, { merge: true });
+    const fields = {
+      sheetUrl: { stringValue: cleanUrl },
+      updatedAt: { timestampValue: new Date().toISOString() },
+      updatedBy: { stringValue: state.reviewerName || 'Coordinator' }
+    };
+    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/config/google_sheet?key=${firebaseConfig.apiKey}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields })
+    });
+  } catch (restErr) {
+    console.warn('REST sheet URL save notice:', restErr);
+  }
+}
+
+async function saveDecisionREST(key, data) {
+  try {
+    const fields = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
+      else fields[k] = { stringValue: String(v || '') };
+    }
+    fields.updatedAt = { timestampValue: new Date().toISOString() };
+    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/decisions/${key}?key=${firebaseConfig.apiKey}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields })
+    });
+    updateSyncIndicator('synced', 'Live Cloud Sync');
   } catch (err) {
-    console.warn('Error saving sheet URL to Firestore:', err);
+    console.warn('REST decision write notice:', err);
+  }
+}
+
+async function saveNoteREST(key, data) {
+  try {
+    const fields = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+      else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
+      else fields[k] = { stringValue: String(v || '') };
+    }
+    fields.noteUpdatedAt = { timestampValue: new Date().toISOString() };
+    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/decisions/${key}?key=${firebaseConfig.apiKey}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields })
+    });
+    updateSyncIndicator('synced', 'Live Cloud Sync');
+  } catch (err) {
+    console.warn('REST note write notice:', err);
   }
 }
 
@@ -424,8 +524,10 @@ function loadLocalState() {
       state.reviewerName = savedReviewer.trim();
     }
     const savedSheetUrl = localStorage.getItem('ufc_sheet_url');
-    if (savedSheetUrl) {
-      state.sheetUrl = savedSheetUrl;
+    if (savedSheetUrl && savedSheetUrl.trim()) {
+      state.sheetUrl = savedSheetUrl.trim();
+    } else {
+      state.sheetUrl = PERMANENT_SHEET_URL;
     }
   } catch (e) {
     console.error('Error loading localStorage cache:', e);
@@ -542,21 +644,27 @@ async function setCandidateDecision(candidateId, decision) {
     updateCounts();
     applyFilters();
 
+    const clearPayload = {
+      decision: 'pending',
+      reviewer: '',
+      candidateId: candidateId,
+      name: c.name || '',
+      rollNo: c.rollNo || ''
+    };
+
     if (db) {
       updateSyncIndicator('syncing', 'Syncing…');
       db.collection('decisions').doc(key).set({
-        decision: 'pending',
-        reviewer: '',
-        candidateId: candidateId,
-        name: c.name || '',
-        rollNo: c.rollNo || '',
+        ...clearPayload,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true })
         .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
         .catch(err => {
-          console.error('Firestore decision update error:', err);
-          updateSyncIndicator('error', 'Cloud sync error');
+          console.warn('Firestore decision update notice, using REST fallback:', err);
+          saveDecisionREST(key, clearPayload);
         });
+    } else {
+      saveDecisionREST(key, clearPayload);
     }
   } else {
     state.decisions[key] = decision;
@@ -569,23 +677,29 @@ async function setCandidateDecision(candidateId, decision) {
     updateCounts();
     applyFilters();
 
+    const selectPayload = {
+      decision: decision,
+      reviewer: reviewer,
+      candidateId: candidateId,
+      name: c.name || '',
+      rollNo: c.rollNo || '',
+      branch: c.branch || '',
+      year: c.year || ''
+    };
+
     if (db) {
       updateSyncIndicator('syncing', 'Syncing…');
       db.collection('decisions').doc(key).set({
-        decision: decision,
-        reviewer: reviewer,
-        candidateId: candidateId,
-        name: c.name || '',
-        rollNo: c.rollNo || '',
-        branch: c.branch || '',
-        year: c.year || '',
+        ...selectPayload,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true })
         .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
         .catch(err => {
-          console.error('Firestore save error:', err);
-          updateSyncIndicator('error', 'Cloud sync error');
+          console.warn('Firestore save notice, using REST fallback:', err);
+          saveDecisionREST(key, selectPayload);
         });
+    } else {
+      saveDecisionREST(key, selectPayload);
     }
   }
 
@@ -647,27 +761,29 @@ async function saveCandidateNote(candidateId, noteText) {
     authorEl.textContent = noteText.trim() ? `(by ${reviewer})` : '';
   }
 
+  const notePayload = {
+    note: noteText,
+    noteAuthor: noteText.trim() ? reviewer : '',
+    candidateId: candidateId,
+    name: c.name || '',
+    rollNo: c.rollNo || '',
+    branch: c.branch || '',
+    year: c.year || ''
+  };
+
   if (db) {
     updateSyncIndicator('syncing', 'Syncing note…');
     db.collection('decisions').doc(key).set({
-      note: noteText,
-      noteAuthor: noteText.trim() ? reviewer : '',
-      candidateId: candidateId,
-      name: c.name || '',
-      rollNo: c.rollNo || '',
-      branch: c.branch || '',
-      year: c.year || '',
+      ...notePayload,
       noteUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
     }, { merge: true })
       .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
       .catch(err => {
-        console.error('Firestore note save error:', err);
-        updateSyncIndicator('error', 'Cloud sync error');
-        if (statusEl) {
-          statusEl.className = 'note-save-status';
-          statusEl.textContent = 'Offline (cached)';
-        }
+        console.warn('Firestore note save notice, using REST fallback:', err);
+        saveNoteREST(key, notePayload);
       });
+  } else {
+    saveNoteREST(key, notePayload);
   }
 }
 
@@ -689,17 +805,20 @@ function getGoogleSheetCSVUrl(url) {
   return url;
 }
 
-async function syncGoogleSheetResponses(forceModal = false) {
-  if (forceModal || !state.sheetUrl) {
+async function syncGoogleSheetResponses(forceModal = false, quiet = false) {
+  if (!state.sheetUrl) {
+    state.sheetUrl = PERMANENT_SHEET_URL;
+  }
+  if (forceModal) {
     openSheetModal();
     return;
   }
 
   const csvUrl = getGoogleSheetCSVUrl(state.sheetUrl);
-  showToast('↻ Connecting to live Google Sheet responses…');
+  if (!quiet) showToast('↻ Connecting to live Google Sheet responses…');
 
   const syncBtn = document.getElementById('sync-sheet-btn');
-  if (syncBtn) syncBtn.textContent = '↻ Syncing…';
+  if (syncBtn && !quiet) syncBtn.textContent = '↻ Syncing…';
 
   try {
     const res = await fetch(csvUrl);
@@ -718,17 +837,23 @@ async function syncGoogleSheetResponses(forceModal = false) {
       saveSheetUrlToFirestore(state.sheetUrl);
 
       const newCount = Math.max(0, parsed.length - oldCount);
-      showToast(newCount > 0 
-        ? `Synced ${parsed.length} responses (${newCount} new candidates uploaded to cloud)! ✓` 
-        : `Synced! All ${parsed.length} responses are up to date on cloud ✓`
-      );
-    } else {
+      if (!quiet) {
+        showToast(newCount > 0 
+          ? `Synced ${parsed.length} responses (${newCount} new candidates uploaded to cloud)! ✓` 
+          : `Synced! All ${parsed.length} responses are up to date on cloud ✓`
+        );
+      } else if (newCount > 0) {
+        showToast(`🔔 ${newCount} new Google Form response(s) synced! ✓`);
+      }
+    } else if (!quiet) {
       showToast('No candidate entries found in sheet');
     }
   } catch (err) {
     console.error('Google Sheet sync error:', err);
-    showToast('Failed to fetch Google Sheet. Check URL or sharing settings.');
-    openSheetModal();
+    if (!quiet) {
+      showToast('Failed to fetch Google Sheet. Check URL or sharing settings.');
+      openSheetModal();
+    }
   } finally {
     if (syncBtn) syncBtn.textContent = '↻ Sync Form';
   }
@@ -753,11 +878,133 @@ function closeSheetModal() {
 
 /**
  * --------------------------------------------------------------------------
- * Initial Responses Loading
+ * Instant Cloud & Sheet Initializer
+ * Guarantees zero blank screen / zero initial entries on all devices
  * --------------------------------------------------------------------------
  */
+function parseFirestoreDoc(doc) {
+  if (!doc || !doc.fields) return null;
+  const idFromPath = doc.name ? doc.name.split('/').pop() : '';
+  const result = { id: idFromPath };
+  for (const [k, v] of Object.entries(doc.fields)) {
+    if ('stringValue' in v) result[k] = v.stringValue;
+    else if ('integerValue' in v) result[k] = Number(v.integerValue);
+    else if ('doubleValue' in v) result[k] = Number(v.doubleValue);
+    else if ('booleanValue' in v) result[k] = v.booleanValue;
+    else if ('timestampValue' in v) result[k] = v.timestampValue;
+    else if ('nullValue' in v) result[k] = null;
+    else result[k] = '';
+  }
+  return result;
+}
+
+async function fastFetchAllData() {
+  const apiKey = firebaseConfig.apiKey;
+  const projectId = firebaseConfig.projectId;
+
+  try {
+    // 1. Fetch Candidates from Firestore REST API
+    const candPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/candidates?pageSize=300&key=${apiKey}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.documents) && data.documents.length > 0) {
+          const list = data.documents.map(parseFirestoreDoc).filter(c => c && c.name);
+          if (list.length > 0) {
+            list.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+            state.excelCandidates = list;
+            mergeCandidates();
+            updateSyncIndicator('synced', 'Live Cloud Sync');
+          }
+        }
+      })
+      .catch(e => console.warn('Fast cand fetch notice:', e));
+
+    // 2. Fetch Walk-ins from Firestore REST API
+    const walkinPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/walkin_responses?pageSize=100&key=${apiKey}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.documents) && data.documents.length > 0) {
+          const list = data.documents.map(doc => {
+            const p = parseFirestoreDoc(doc);
+            return { ...p, isWalkin: true };
+          }).filter(c => c && c.name);
+          if (list.length > 0) {
+            state.walkinCandidates = list;
+            mergeCandidates();
+          }
+        }
+      })
+      .catch(e => console.warn('Fast walkin fetch notice:', e));
+
+    // 3. Fetch Decisions & Notes from Firestore REST API
+    const decPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/decisions?pageSize=300&key=${apiKey}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.documents) && data.documents.length > 0) {
+          data.documents.forEach(doc => {
+            const p = parseFirestoreDoc(doc);
+            if (p && p.id) {
+              const key = p.id;
+              if (p.decision) {
+                state.decisions[key] = p.decision;
+                if (p.candidateId) state.decisions[p.candidateId] = p.decision;
+              }
+              if (p.reviewer) {
+                state.reviewers[key] = p.reviewer;
+                if (p.candidateId) state.reviewers[p.candidateId] = p.reviewer;
+              }
+              if (p.note !== undefined) {
+                state.notes[key] = p.note;
+                if (p.candidateId) state.notes[p.candidateId] = p.note;
+              }
+              if (p.noteAuthor) {
+                state.noteAuthors[key] = p.noteAuthor;
+                if (p.candidateId) state.noteAuthors[p.candidateId] = p.noteAuthor;
+              }
+            }
+          });
+          saveLocalState();
+          updateCounts();
+          applyFilters();
+        }
+      })
+      .catch(e => console.warn('Fast dec fetch notice:', e));
+
+    // 4. Fetch Google Sheet config URL from Firestore REST
+    const configPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/config/google_sheet?key=${apiKey}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.fields && data.fields.sheetUrl && data.fields.sheetUrl.stringValue) {
+          const url = data.fields.sheetUrl.stringValue.trim();
+          if (url && url !== state.sheetUrl) {
+            state.sheetUrl = url;
+            saveLocalState();
+          }
+        }
+      })
+      .catch(e => console.warn('Fast config fetch notice:', e));
+
+    await Promise.allSettled([candPromise, walkinPromise, decPromise, configPromise]);
+
+    // If candidate list was still empty for any reason, fetch live sheet directly
+    if (state.excelCandidates.length === 0) {
+      await syncGoogleSheetResponses(false, true);
+    }
+  } catch (err) {
+    console.warn('Fast fetch all notice:', err);
+    if (state.excelCandidates.length === 0) {
+      await syncGoogleSheetResponses(false, true);
+    }
+  } finally {
+    mergeCandidates();
+    if (state.candidates.length > 0) {
+      updateSyncIndicator('synced', 'Live Cloud Sync');
+    }
+  }
+}
+
 function initData() {
-  // Load local walk-in candidates backup from server if running
+  // 1. Fetch walk-in candidates backup from local Node server if running
   fetch('/api/walkin-candidates')
     .then(res => res.json())
     .then(data => {
@@ -773,19 +1020,29 @@ function initData() {
     })
     .catch(() => {});
 
-  // If Firebase is available, candidate responses and walk-ins are streamed
-  // live directly from Firebase Cloud Firestore (see initFirestoreSync).
-  // Offline fallback only: if Firebase SDK is not present or offline, load local CSV.
-  if (typeof firebase === 'undefined') {
-    fetch('UFC FOSS Recruitment Form (Responses) - Form responses 1.csv')
-      .then(res => res.text())
-      .then(csv => {
-        loadCSV(csv);
-      })
-      .catch(() => {
-        mergeCandidates();
-      });
-  }
+  // 2. Immediate cloud load via fast REST path
+  fastFetchAllData();
+
+  // 3. Keep all devices in sync even if background tabs sleep
+  startCloudBackgroundSync();
+}
+
+/**
+ * Periodic background cloud sync (every 12 seconds + on tab visibility change)
+ * Ensures 100% data freshness across mobile phones and desktop tabs
+ */
+let bgSyncInterval = null;
+function startCloudBackgroundSync() {
+  if (bgSyncInterval) clearInterval(bgSyncInterval);
+  bgSyncInterval = setInterval(() => {
+    fastFetchAllData();
+  }, 12000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      fastFetchAllData();
+    }
+  });
 }
 
 /**

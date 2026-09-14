@@ -73,6 +73,24 @@ app.post('/api/register', (req, res) => {
 
     fs.writeFileSync(WALKIN_DATA_FILE, JSON.stringify(responses, null, 2));
 
+    // Also mirror to Firebase Cloud Firestore via REST
+    try {
+      const apiKey = 'AIzaSyAjV2EkLn-qp3WW_gTUj_cFR8Eqc8h7SIY';
+      const projectId = 'ufc-recruitment-2026';
+      const fields = {};
+      for (const [k, v] of Object.entries(newEntry)) {
+        if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+        else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
+        else fields[k] = { stringValue: String(v || '') };
+      }
+      fields.createdAt = { timestampValue: new Date().toISOString() };
+      fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/walkin_responses/${newEntry.id}?key=${apiKey}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      }).catch(cloudErr => console.warn('Cloud walk-in mirror notice:', cloudErr));
+    } catch (e) {}
+
     return res.json({ success: true, candidate: newEntry });
   } catch (err) {
     console.error('Error saving walk-in response:', err);
