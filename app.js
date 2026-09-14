@@ -237,6 +237,22 @@ function filter() {
 }
 
 /**
+ * Helper to render each form question consistently
+ */
+function renderField(question, value, query, isMono = false) {
+  const val = (value || '').trim();
+  const content = val 
+    ? highlight(val, query) 
+    : '<span class="unanswered">—</span>';
+  return `
+    <div class="field">
+      <div class="field-label">${escapeHtml(question)}</div>
+      <div class="field-text ${isMono ? 'mono' : ''} ${!val ? 'is-empty' : ''}">${content}</div>
+    </div>
+  `;
+}
+
+/**
  * Render Candidate Cards & Actual Responses
  */
 function render() {
@@ -282,54 +298,14 @@ function render() {
         </div>
 
         <div class="fields">
-          ${c.domains ? `
-            <div class="field">
-              <div class="field-label">Which sub-teams/domains are you most interested in joining?</div>
-              <div class="field-text">${highlight(c.domains, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.techStack ? `
-            <div class="field">
-              <div class="field-label">What tech stack or tools are you familiar with?</div>
-              <div class="field-text mono">${highlight(c.techStack, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.contributions ? `
-            <div class="field">
-              <div class="field-label">If YES: Which organizations/repositories have you contributed to?</div>
-              <div class="field-text">${highlight(c.contributions, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.admiredTool ? `
-            <div class="field">
-              <div class="field-label">If NO: Which open-source software, library, or tool do you admire the most, and why?</div>
-              <div class="field-text">${highlight(c.admiredTool, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.fossMeaning ? `
-            <div class="field">
-              <div class="field-label">What does Open Source (FOSS) mean to you, and what are your thoughts on its culture?</div>
-              <div class="field-text">${highlight(c.fossMeaning, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.whyJoin ? `
-            <div class="field">
-              <div class="field-label">Why do you want to join UFC FOSS, and what do you hope to achieve here?</div>
-              <div class="field-text">${highlight(c.whyJoin, q)}</div>
-            </div>
-          ` : ''}
-
-          ${c.otherInfo ? `
-            <div class="field">
-              <div class="field-label">Anything else you'd like to share with us?</div>
-              <div class="field-text">${highlight(c.otherInfo, q)}</div>
-            </div>
-          ` : ''}
+          ${renderField('Have you ever contributed to an open-source project?', c.contributed, q)}
+          ${renderField('Which sub-teams/domains are you most interested in joining?', c.domains, q)}
+          ${renderField('What tech stack or tools are you familiar with?', c.techStack, q, true)}
+          ${renderField('If YES: Which organizations/repositories have you contributed to?', c.contributions, q)}
+          ${renderField('If NO: Which open-source software, library, or tool do you admire the most, and why?', c.admiredTool, q)}
+          ${renderField('What does Open Source (FOSS) mean to you, and what are your thoughts on its culture?', c.fossMeaning, q)}
+          ${renderField('Why do you want to join UFC FOSS, and what do you hope to achieve here?', c.whyJoin, q)}
+          ${renderField("Anything else you'd like to share with us?", c.otherInfo, q)}
         </div>
       </article>
     `;
