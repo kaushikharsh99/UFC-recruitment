@@ -14,14 +14,21 @@
 
     <header class="top">
       <div class="brand">
-        <span class="mark">UFC<span class="dot">/</span>FOSS</span>
-        <span class="tally" id="count-badge">75</span>
+        <div class="logo-badge">UFC</div>
+        <div class="brand-details">
+          <h1 class="brand-title">FOSS CLUB</h1>
+          <span class="brand-sub">USAR &bull; <span class="tally" id="count-badge">75</span> responses</span>
+        </div>
       </div>
-      <label class="import" for="csv-file-input">Import CSV</label>
+      <label class="import" for="csv-file-input">+ Import CSV</label>
       <input type="file" id="csv-file-input" accept=".csv" hidden>
     </header>
 
     <div class="search">
+      <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
       <input
         type="text"
         id="search-input"

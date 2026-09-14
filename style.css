@@ -39,29 +39,50 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 2.75rem;
+  margin-bottom: 2.25rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .brand {
   display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
+  align-items: center;
+  gap: 0.85rem;
 }
 
-.mark {
+.logo-badge {
+  background: var(--green);
+  color: #000000;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.3rem 0.55rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.brand-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.brand-title {
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
-.mark .dot {
-  color: var(--green);
+.brand-sub {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
 }
 
 .tally {
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.75rem;
-  color: var(--ink-dim);
+  color: var(--green);
 }
 
 .import {
@@ -69,8 +90,10 @@ body {
   font-size: 0.75rem;
   color: var(--ink-dim);
   cursor: pointer;
-  padding-bottom: 0.15rem;
-  border-bottom: 1px solid var(--line);
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #080808;
   transition: color 0.15s, border-color 0.15s;
 }
 
@@ -79,27 +102,46 @@ body {
   border-color: var(--green);
 }
 
-/* ---------- Search ---------- */
+/* ---------- Boxed Search ---------- */
 
 .search {
   position: relative;
-  border-bottom: 1px solid var(--line);
-  transition: border-color 0.15s;
+  display: flex;
+  align-items: center;
+  background: #090909;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 0.85rem 0 1rem;
+  height: 48px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .search:focus-within {
   border-color: var(--green);
+  background: #0d0d0d;
+}
+
+.search-icon {
+  color: var(--ink-dim);
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.search:focus-within .search-icon {
+  color: var(--green);
 }
 
 .search input {
-  width: 100%;
+  flex: 1;
   background: transparent;
   border: none;
   outline: none;
   color: var(--ink);
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.05rem;
-  padding: 0.7rem 2rem 0.7rem 0;
+  font-size: 0.98rem;
+  height: 100%;
+  padding-right: 2rem;
 }
 
 .search input::placeholder {
@@ -108,15 +150,16 @@ body {
 
 .clear {
   position: absolute;
-  right: 0;
+  right: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
   color: var(--ink-dim);
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
+  padding: 0.2rem;
 }
 
 .clear:hover { color: var(--green); }
@@ -125,7 +168,7 @@ body {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.72rem;
   color: var(--ink-faint);
-  margin-top: 0.6rem;
+  margin-top: 0.65rem;
   margin-bottom: 0;
 }
 
