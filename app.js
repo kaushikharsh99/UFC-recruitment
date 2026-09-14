@@ -34,10 +34,105 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', () => {
   loadLocalState();
+  initSecurityGate();
   initData();
   bindEvents();
   initFirebase();
 });
+
+/**
+ * --------------------------------------------------------------------------
+ * Coordinator Security Gate (Passcode protection for recruitment portal)
+ * --------------------------------------------------------------------------
+ */
+function initSecurityGate() {
+  const overlay = document.getElementById('portal-lock-overlay');
+  const form = document.getElementById('portal-lock-form');
+  const input = document.getElementById('portal-passcode-input');
+  const errorEl = document.getElementById('portal-lock-error');
+  const lockBtn = document.getElementById('portal-lock-btn');
+
+  if (!overlay) return;
+
+  const isUnlocked = sessionStorage.getItem('ufc_portal_unlocked') === 'true';
+  if (!isUnlocked) {
+    overlay.classList.remove('hidden');
+    if (input) setTimeout(() => input.focus(), 150);
+  } else {
+    overlay.classList.add('hidden');
+  }
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = input ? input.value.trim() : '';
+      if (!code) return;
+
+      if (errorEl) errorEl.classList.add('hidden');
+
+      const unlockBtn = document.getElementById('portal-unlock-btn');
+      if (unlockBtn) {
+        unlockBtn.disabled = true;
+        unlockBtn.textContent = 'Verifying…';
+      }
+
+      let authenticated = false;
+
+      // 1. Try server verification against .env PORTAL_PASSWORD
+      try {
+        const res = await fetch('/api/verify-portal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passcode: code })
+        });
+        const data = await res.json();
+        if (res.ok && data.valid) {
+          authenticated = true;
+        } else if (res.status === 403) {
+          authenticated = false;
+        }
+      } catch (err) {
+        // Fallback for standalone/static usage without server.js
+        if (code === 'UFC_RECRUIT_2026' || code === 'UFC_WALKIN_2026') {
+          authenticated = true;
+        }
+      }
+
+      if (unlockBtn) {
+        unlockBtn.disabled = false;
+        unlockBtn.textContent = 'Unlock Recruitment Portal →';
+      }
+
+      if (authenticated) {
+        sessionStorage.setItem('ufc_portal_unlocked', 'true');
+        overlay.classList.add('hidden');
+        showToast('Access granted! Welcome to UFC Recruitment Portal.');
+        if (input) input.value = '';
+      } else {
+        if (errorEl) {
+          errorEl.textContent = 'Incorrect passcode. Please check your .env file or ask lead coordinator.';
+          errorEl.classList.remove('hidden');
+        }
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    });
+  }
+
+  if (lockBtn) {
+    lockBtn.addEventListener('click', () => {
+      sessionStorage.removeItem('ufc_portal_unlocked');
+      overlay.classList.remove('hidden');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      showToast('Dashboard locked 🔒');
+    });
+  }
+}
 
 /**
  * --------------------------------------------------------------------------

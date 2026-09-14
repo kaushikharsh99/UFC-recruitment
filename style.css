@@ -1171,3 +1171,120 @@ mark.match {
   .modal-footer { flex-direction: column; align-items: stretch; }
   .modal-decision-btns { justify-content: space-between; }
 }
+
+/* ---------- Coordinator Security Gate Overlay ---------- */
+.portal-lock-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.lock-card {
+  width: 100%;
+  max-width: 440px;
+  background: #090909;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 2.25rem 2rem;
+  text-align: center;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.lock-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  margin-bottom: 0.85rem;
+}
+
+.lock-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.lock-sub {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.2rem;
+}
+
+.lock-divider {
+  width: 40px;
+  height: 2px;
+  background: var(--green);
+  margin: 1.15rem auto;
+}
+
+.lock-desc {
+  font-size: 0.84rem;
+  color: var(--ink-dim);
+  line-height: 1.55;
+  margin-bottom: 1.5rem;
+}
+
+.lock-desc strong {
+  color: #ffffff;
+}
+
+.lock-input {
+  width: 100%;
+  background: #040404;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: 0.75rem 0.95rem;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  outline: none;
+  margin-bottom: 0.85rem;
+  text-align: center;
+  letter-spacing: 0.05em;
+  transition: border-color 0.15s;
+}
+
+.lock-input:focus {
+  border-color: var(--green);
+  background: #070707;
+}
+
+.lock-btn {
+  width: 100%;
+  background: var(--green);
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  padding: 0.8rem;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: all 0.15s ease;
+}
+
+.lock-btn:hover {
+  background: var(--green-hover);
+}
+
+.lock-error {
+  margin-top: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--red);
+}
+

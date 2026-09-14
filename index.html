@@ -41,6 +41,9 @@
         <button id="reset-decisions-btn" class="btn-action btn-reset hidden" title="Clear all saved selections and rejections across cloud and local">
           Reset All
         </button>
+        <button id="portal-lock-btn" class="btn-action" title="Lock the dashboard">
+          🔒 Lock
+        </button>
         <button id="export-selected-btn" class="btn-action btn-export" title="Export selected candidates to CSV">
           Export Selected (<span id="export-count">0</span>)
         </button>
@@ -189,6 +192,34 @@
         <button id="sheet-cancel-btn" class="btn-action">Cancel</button>
         <button id="sheet-save-btn" class="btn-action btn-export">Connect &amp; Sync Now</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Coordinator Security Gate Overlay (Passcode protection for recruitment portal) -->
+  <div id="portal-lock-overlay" class="portal-lock-overlay hidden">
+    <div class="lock-card">
+      <img src="logo.png" alt="UFC FOSS Logo" class="lock-logo">
+      <h2 class="lock-title">UFC FOSS CLUB</h2>
+      <p class="lock-sub">Recruitment Portal 2026</p>
+      <div class="lock-divider"></div>
+      <p class="lock-desc">
+        🔒 <strong>Coordinator Access Required</strong><br>
+        Please enter your passcode to access candidate submissions, reviewer tools, and interview notes.
+      </p>
+      <form id="portal-lock-form">
+        <input
+          type="password"
+          id="portal-passcode-input"
+          class="lock-input"
+          placeholder="Enter Passcode (configured in .env)"
+          required
+          autocomplete="current-password"
+        >
+        <button type="submit" id="portal-unlock-btn" class="lock-btn">
+          Unlock Recruitment Portal &rarr;
+        </button>
+        <div id="portal-lock-error" class="lock-error hidden"></div>
+      </form>
     </div>
   </div>
 

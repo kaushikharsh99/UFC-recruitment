@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ACCESS_CODE = process.env.WALKIN_ACCESS_CODE || 'UFC_WALKIN_2026';
+const PORTAL_PASSWORD = process.env.PORTAL_PASSWORD || process.env.WALKIN_ACCESS_CODE || 'UFC_RECRUIT_2026';
 
 const WALKIN_DATA_FILE = path.join(__dirname, 'walkin_responses.json');
 
@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Dedicated endpoints for Walk-in Registration
+// Dedicated open endpoints for Walk-in Registration
 app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'register.html'));
 });
@@ -31,22 +31,18 @@ app.get('/walkin', (req, res) => {
   res.sendFile(path.join(__dirname, 'register.html'));
 });
 
-// API: Verify access passcode
-app.post('/api/verify-code', (req, res) => {
-  const { accessCode } = req.body || {};
-  if (!accessCode || String(accessCode).trim() !== String(ACCESS_CODE).trim()) {
-    return res.status(403).json({ valid: false, error: 'Invalid access passcode. Please ask the UFC team.' });
+// API: Verify coordinator passcode for main recruitment portal
+app.post('/api/verify-portal', (req, res) => {
+  const { passcode } = req.body || {};
+  if (!passcode || String(passcode).trim() !== String(PORTAL_PASSWORD).trim()) {
+    return res.status(403).json({ valid: false, error: 'Incorrect coordinator passcode. Access denied.' });
   }
   return res.json({ valid: true });
 });
 
-// API: Submit walk-in candidate registration
+// API: Submit walk-in candidate registration (Open access for students)
 app.post('/api/register', (req, res) => {
-  const { accessCode, candidate } = req.body || {};
-
-  if (!accessCode || String(accessCode).trim() !== String(ACCESS_CODE).trim()) {
-    return res.status(403).json({ success: false, error: 'Unauthorized: Invalid registration passcode.' });
-  }
+  const { candidate } = req.body || {};
 
   if (!candidate || !candidate.name || !candidate.rollNo) {
     return res.status(400).json({ success: false, error: 'Missing required candidate information (Name and Roll No).' });
@@ -61,13 +57,20 @@ app.post('/api/register', (req, res) => {
 
     const newEntry = {
       ...candidate,
-      id: `walkin_${Date.now()}`,
+      id: `walkin_${candidate.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
       isWalkin: true,
       timestamp: candidate.timestamp || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
       createdAt: new Date().toISOString()
     };
 
-    responses.push(newEntry);
+    // Prevent duplicate entries by roll number
+    const existingIndex = responses.findIndex(r => r.rollNo === candidate.rollNo);
+    if (existingIndex >= 0) {
+      responses[existingIndex] = newEntry;
+    } else {
+      responses.push(newEntry);
+    }
+
     fs.writeFileSync(WALKIN_DATA_FILE, JSON.stringify(responses, null, 2));
 
     return res.json({ success: true, candidate: newEntry });
@@ -94,8 +97,8 @@ app.get('/api/walkin-candidates', (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n======================================================`);
   console.log(`🚀 UFC FOSS Recruitment Server live at: http://localhost:${PORT}`);
-  console.log(`📋 Reviewer Dashboard:      http://localhost:${PORT}/`);
-  console.log(`📝 Walk-in Registration:   http://localhost:${PORT}/register`);
-  console.log(`🔒 Walk-in Passcode:       Configured via .env (WALKIN_ACCESS_CODE)`);
+  console.log(`🔒 Reviewer Portal (Protected): http://localhost:${PORT}/`);
+  console.log(`📝 Walk-in Form (Open):         http://localhost:${PORT}/register`);
+  console.log(`🔑 Coordinator Password:        Configured via .env (PORTAL_PASSWORD)`);
   console.log(`======================================================\n`);
 });

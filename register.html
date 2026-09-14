@@ -262,25 +262,6 @@
       <!-- Registration Form -->
       <form id="walkin-form">
 
-        <!-- Access Passcode Box (Secured via .env) -->
-        <div class="passcode-box">
-          <label class="passcode-label" for="access-code">
-            🔒 Walk-in Access Passcode <span class="req" style="color: var(--green);">*</span>
-          </label>
-          <p class="passcode-desc">
-            Please ask the UFC recruitment coordinator in your room for the registration pass code to submit your application.
-          </p>
-          <input
-            type="password"
-            id="access-code"
-            class="form-input"
-            placeholder="Enter Walk-in Passcode"
-            required
-            autocomplete="off"
-          >
-          <div id="code-error" class="err-msg hidden"></div>
-        </div>
-
         <!-- Personal Info -->
         <div class="form-section">
           <div class="section-title">01 &bull; Personal &amp; Academic Details</div>
@@ -456,19 +437,8 @@
     const form = document.getElementById('walkin-form');
     const submitBtn = document.getElementById('submit-btn');
     const successPanel = document.getElementById('success-panel');
-    const codeError = document.getElementById('code-error');
-
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      codeError.classList.add('hidden');
-      codeError.textContent = '';
-
-      const accessCode = document.getElementById('access-code').value.trim();
-      if (!accessCode) {
-        codeError.textContent = 'Please enter the walk-in registration passcode.';
-        codeError.classList.remove('hidden');
-        return;
-      }
 
       // Collect selected domains
       const selectedDomains = Array.from(document.querySelectorAll('input[name="domain"]:checked'))
@@ -507,33 +477,21 @@
       submitBtn.textContent = 'Submitting application…';
 
       try {
-        // Step 1: Submit to Node.js backend to verify .env passcode & store locally
-        let serverVerified = false;
+        // Step 1: Submit to Node.js backend if running
         try {
-          const res = await fetch('/api/register', {
+          await fetch('/api/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ accessCode, candidate: candidateData })
+            body: JSON.stringify({ candidate: candidateData })
           });
-
-          const resData = await res.json();
-          if (res.status === 403 || !res.ok) {
-            codeError.textContent = resData.error || 'Incorrect passcode. Please verify with coordinator.';
-            codeError.classList.remove('hidden');
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Submit Walk-in Application →';
-            return;
-          }
-          serverVerified = true;
         } catch (serverErr) {
-          // If running as purely static without server.js, verify fallback or allow Firestore
-          console.warn('Node server not reachable, using Firestore directly:', serverErr);
+          console.warn('Local node server notice:', serverErr);
         }
 
-        // Step 2: Write directly to Firebase Cloud Firestore walkin_responses collection
+        // Step 2: Write directly to Firebase Cloud Firestore for real-time cloud sync across devices
         if (db) {
           const cleanRoll = candidateData.rollNo.toLowerCase().replace(/[^a-z0-9]/g, '_');
-          const docId = `walkin_${cleanRoll}_${Date.now()}`;
+          const docId = `walkin_${cleanRoll}`;
           await db.collection('walkin_responses').doc(docId).set({
             ...candidateData,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
