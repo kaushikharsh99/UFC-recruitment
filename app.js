@@ -268,17 +268,17 @@ function render() {
         </div>
 
         <div class="tags">
-          ${c.branch ? `<span>${highlight(c.branch, q)}</span>` : ''}
-          ${c.year ? `<span>${highlight(c.year, q)}</span>` : ''}
-          ${c.rollNo ? `<span class="tag-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy">${highlight(c.rollNo, q)}</span>` : ''}
-          <span class="tag-status">${isContributor ? 'Contributor' : 'Eager to learn'}</span>
+          ${c.branch ? `<span class="tag-badge tag-branch">${highlight(c.branch, q)}</span>` : ''}
+          ${c.year ? `<span class="tag-badge tag-year">${highlight(c.year, q)}</span>` : ''}
+          ${c.rollNo ? `<span class="tag-badge tag-roll" data-roll="${escapeHtml(c.rollNo)}" title="Click to copy roll number">Roll: ${highlight(c.rollNo, q)}</span>` : ''}
+          <span class="tag-badge ${isContributor ? 'tag-contrib' : 'tag-learn'}">${isContributor ? 'Contributor' : 'Eager to learn'}</span>
         </div>
 
         <div class="links">
+          ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="link-wa">WhatsApp: ${highlight(c.phone, q)} ↗</a>` : ''}
           ${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${highlight(c.email, q)}</a>` : ''}
-          ${c.phone ? `<a href="https://wa.me/${waPhone}" target="_blank" rel="noopener noreferrer" class="dim">WhatsApp</a>` : ''}
-          ${githubUrl ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer">GitHub</a>` : ''}
-          ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio</a>` : ''}
+          ${githubUrl ? `<a href="${githubUrl}" target="_blank" rel="noopener noreferrer">GitHub ↗</a>` : ''}
+          ${linkedinUrl ? `<a href="${linkedinUrl}" target="_blank" rel="noopener noreferrer">Portfolio ↗</a>` : ''}
         </div>
 
         <div class="fields">
