@@ -252,12 +252,11 @@ body {
   background: #060606;
   cursor: pointer;
   font-weight: 600;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s;
 }
 
 .tag-roll:hover {
   border-color: var(--green);
-  box-shadow: 0 0 10px rgba(0, 255, 102, 0.35);
 }
 
 .tag-contrib {
@@ -277,18 +276,18 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 1.1rem;
+  gap: 1.2rem;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.82rem;
-  margin-bottom: 1.35rem;
-  padding: 0.6rem 0.85rem;
+  margin-bottom: 1.25rem;
+  padding: 0.55rem 0.85rem;
   background: #090909;
   border: 1px solid var(--line);
   border-radius: 4px;
 }
 
 .links a {
-  color: #ffffff;
+  color: var(--ink);
   text-decoration: none;
   border-bottom: 1px solid transparent;
   transition: color 0.15s, border-bottom-color 0.15s;
@@ -301,25 +300,27 @@ body {
 
 .links a.link-wa {
   color: var(--green);
-  text-shadow: 0 0 8px rgba(0, 255, 102, 0.7), 0 0 16px rgba(0, 255, 102, 0.35);
   font-weight: 500;
-  border-bottom: 1px solid var(--green);
+  border-bottom: 1px solid rgba(0, 255, 102, 0.35);
 }
 
 .links a.link-wa:hover {
-  text-shadow: 0 0 12px rgba(0, 255, 102, 1), 0 0 24px rgba(0, 255, 102, 0.6);
+  color: var(--green);
+  border-bottom-color: var(--green);
 }
 
 .field {
-  margin-bottom: 1.15rem;
-  background: #060606;
-  border-left: 3px solid #222222;
+  margin-bottom: 0.85rem;
+  background: #080808;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--green);
   padding: 0.75rem 1rem;
-  border-radius: 0 4px 4px 0;
-  transition: border-left-color 0.15s;
+  border-radius: 4px;
+  transition: border-color 0.15s;
 }
 
 .field:hover {
+  border-color: #282828;
   border-left-color: var(--green);
 }
 
@@ -327,7 +328,7 @@ body {
 
 .field-label {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
