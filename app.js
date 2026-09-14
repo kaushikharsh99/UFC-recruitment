@@ -284,49 +284,49 @@ function render() {
         <div class="fields">
           ${c.domains ? `
             <div class="field">
-              <div class="field-label">Sub-teams interested in</div>
+              <div class="field-label">Which sub-teams/domains are you most interested in joining?</div>
               <div class="field-text">${highlight(c.domains, q)}</div>
             </div>
           ` : ''}
 
           ${c.techStack ? `
             <div class="field">
-              <div class="field-label">Tech stack</div>
+              <div class="field-label">What tech stack or tools are you familiar with?</div>
               <div class="field-text mono">${highlight(c.techStack, q)}</div>
             </div>
           ` : ''}
 
-          ${isContributor && c.contributions ? `
+          ${c.contributions ? `
             <div class="field">
-              <div class="field-label">Open source contributions</div>
+              <div class="field-label">If YES: Which organizations/repositories have you contributed to?</div>
               <div class="field-text">${highlight(c.contributions, q)}</div>
             </div>
           ` : ''}
 
-          ${!isContributor && c.admiredTool ? `
+          ${c.admiredTool ? `
             <div class="field">
-              <div class="field-label">Admired open source tool</div>
+              <div class="field-label">If NO: Which open-source software, library, or tool do you admire the most, and why?</div>
               <div class="field-text">${highlight(c.admiredTool, q)}</div>
             </div>
           ` : ''}
 
           ${c.fossMeaning ? `
             <div class="field">
-              <div class="field-label">What FOSS means to them</div>
+              <div class="field-label">What does Open Source (FOSS) mean to you, and what are your thoughts on its culture?</div>
               <div class="field-text">${highlight(c.fossMeaning, q)}</div>
             </div>
           ` : ''}
 
           ${c.whyJoin ? `
             <div class="field">
-              <div class="field-label">Why join UFC FOSS</div>
+              <div class="field-label">Why do you want to join UFC FOSS, and what do you hope to achieve here?</div>
               <div class="field-text">${highlight(c.whyJoin, q)}</div>
             </div>
           ` : ''}
 
           ${c.otherInfo ? `
             <div class="field">
-              <div class="field-label">Anything else</div>
+              <div class="field-label">Anything else you'd like to share with us?</div>
               <div class="field-text">${highlight(c.otherInfo, q)}</div>
             </div>
           ` : ''}
