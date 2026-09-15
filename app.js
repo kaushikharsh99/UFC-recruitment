@@ -5,14 +5,14 @@
  * Horizontal Tiles, Select/Reject Decision Engine, Detail Modal Popup, Interviewer Notes & CSV Export
  */
 
-// Firebase Configuration (Project: ufc-recruitment-2026, Region: asia-south1)
+// Firebase Configuration (Project: ufc-recruitment-live, Region: nam5)
 const firebaseConfig = {
-  apiKey: "AIzaSyAjV2EkLn-qp3WW_gTUj_cFR8Eqc8h7SIY",
-  authDomain: "ufc-recruitment-2026.firebaseapp.com",
-  projectId: "ufc-recruitment-2026",
-  storageBucket: "ufc-recruitment-2026.firebasestorage.app",
-  messagingSenderId: "650383969929",
-  appId: "1:650383969929:web:fd74fe5a733061978d8058"
+  apiKey: "AIzaSyAmYv7uMn6hArUvTYN2i8jq8KK68s_dHzQ",
+  authDomain: "ufc-recruitment-live.firebaseapp.com",
+  projectId: "ufc-recruitment-live",
+  storageBucket: "ufc-recruitment-live.firebasestorage.app",
+  messagingSenderId: "557306416377",
+  appId: "1:557306416377:web:cea63465f7466924f62628"
 };
 
 const PERMANENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/1CgP_kPuyrLOnULeDfEpY3jLS7Op6dcn2Q8AATnkrgaY/edit?usp=sharing";
@@ -211,60 +211,18 @@ function initFirestoreSync() {
     }
   }, 1500);
 
-  // Real-time listener for candidate decisions and notes
-  db.collection('decisions').onSnapshot((snapshot) => {
+  // 1. Ultra-minimal read listener: listens to consolidated state in 1 document
+  // Consumes exactly 1 document read per decision/note change across all devices
+  db.collection('sync_meta').doc('state').onSnapshot((doc) => {
     updateSyncIndicator('synced', 'Live Cloud Sync');
-    snapshot.docChanges().forEach((change) => {
-      const key = change.doc.id;
-      const data = change.doc.data();
-
-      if (change.type === 'removed') {
-        delete state.decisions[key];
-        delete state.reviewers[key];
-        delete state.notes[key];
-        delete state.noteAuthors[key];
-      } else if (data) {
-        if (data.decision !== undefined) {
-          state.decisions[key] = data.decision;
-          if (data.candidateId) state.decisions[data.candidateId] = data.decision;
-        }
-        if (data.reviewer) {
-          state.reviewers[key] = data.reviewer;
-          if (data.candidateId) state.reviewers[data.candidateId] = data.reviewer;
-        }
-        if (data.note !== undefined) {
-          state.notes[key] = data.note;
-          if (data.candidateId) state.notes[data.candidateId] = data.note;
-        }
-        if (data.noteAuthor) {
-          state.noteAuthors[key] = data.noteAuthor;
-          if (data.candidateId) state.noteAuthors[data.candidateId] = data.noteAuthor;
-        }
-      }
-    });
-
-    saveLocalState();
-    updateCounts();
-    applyFilters();
-
-    if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
-      const active = state.filtered[state.currentModalIndex];
-      updateModalDecisionState(active);
-
-      const noteInput = document.getElementById('modal-note-input');
-      const noteAuthorEl = document.getElementById('modal-note-author');
-      if (noteInput && document.activeElement !== noteInput) {
-        noteInput.value = getCandidateNote(active);
-        const author = getCandidateNoteAuthor(active);
-        if (noteAuthorEl) noteAuthorEl.textContent = author && noteInput.value.trim() ? `(by ${author})` : '';
-      }
+    if (doc.exists) {
+      extractSyncedState(doc.data());
     }
   }, (error) => {
-    console.error('Firestore listener error:', error);
-    updateSyncIndicator('error', 'Cloud Disconnected');
+    console.warn('Firestore sync_meta listener notice:', error);
   });
 
-  // Real-time listener for Walk-in applicants registered via /register
+  // 2. Real-time listener for Walk-in applicants registered via /register (walk-ins only)
   db.collection('walkin_responses').onSnapshot((snapshot) => {
     updateSyncIndicator('synced', 'Live Cloud Sync');
     const list = [];
@@ -308,182 +266,132 @@ function initFirestoreSync() {
   }, (err) => {
     console.warn('Walk-in listener notice:', err);
   });
-
-  // Real-time listener for candidate responses in Firestore (Google Sheet applicants)
-  db.collection('candidates').onSnapshot((snapshot) => {
-    updateSyncIndicator('synced', 'Live Cloud Sync');
-    if (!snapshot.empty) {
-      const cloudCandidates = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data && data.name) {
-          cloudCandidates.push({
-            id: Number(data.id) || doc.id,
-            timestamp: data.timestamp || '',
-            email: data.email || '',
-            name: data.name || '',
-            phone: data.phone || '',
-            rollNo: data.rollNo || '',
-            branch: data.branch || '',
-            year: data.year || '',
-            github: data.github || '',
-            linkedin: data.linkedin || '',
-            fossMeaning: data.fossMeaning || '',
-            contributed: data.contributed || '',
-            contributions: data.contributions || '',
-            admiredTool: data.admiredTool || '',
-            domains: data.domains || '',
-            techStack: data.techStack || '',
-            whyJoin: data.whyJoin || '',
-            otherInfo: data.otherInfo || '',
-            isWalkin: false
-          });
-        }
-      });
-      if (cloudCandidates.length > 0) {
-        cloudCandidates.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-        state.excelCandidates = cloudCandidates;
-        mergeCandidates();
-      }
-    }
-  }, (err) => {
-    console.warn('Candidates cloud sync notice:', err);
-  });
-
-  // Real-time listener for connected Google Sheet URL across coordinators
-  db.collection('config').doc('google_sheet').onSnapshot((doc) => {
-    if (doc.exists) {
-      const data = doc.data();
-      if (data && data.sheetUrl && data.sheetUrl.trim() && data.sheetUrl !== state.sheetUrl) {
-        state.sheetUrl = data.sheetUrl.trim();
-        saveLocalState();
-      }
-    }
-  }, (err) => {
-    console.warn('Config listener notice:', err);
-  });
 }
 
 /**
- * Upload candidate responses to Firebase Cloud Firestore
- * Syncs candidates across all reviewer devices instantly
+ * Parses and merges synced recruitment state from Firestore into client state
+ */
+function extractSyncedState(data) {
+  if (!data) return;
+  let decs = {};
+  let revs = {};
+  let nts = {};
+  let auths = {};
+  try {
+    decs = typeof data.decisions === 'string' ? JSON.parse(data.decisions || '{}') : (data.decisions || {});
+  } catch (e) { decs = data.decisions || {}; }
+  try {
+    revs = typeof data.reviewers === 'string' ? JSON.parse(data.reviewers || '{}') : (data.reviewers || {});
+  } catch (e) { revs = data.reviewers || {}; }
+  try {
+    nts = typeof data.notes === 'string' ? JSON.parse(data.notes || '{}') : (data.notes || {});
+  } catch (e) { nts = data.notes || {}; }
+  try {
+    auths = typeof data.noteAuthors === 'string' ? JSON.parse(data.noteAuthors || '{}') : (data.noteAuthors || {});
+  } catch (e) { auths = data.noteAuthors || {}; }
+
+  if (data.sheetUrl && typeof data.sheetUrl === 'string' && data.sheetUrl.trim() && data.sheetUrl !== state.sheetUrl) {
+    state.sheetUrl = data.sheetUrl.trim();
+  }
+
+  // Update in-memory state cleanly
+  state.decisions = decs;
+  state.reviewers = revs;
+  state.notes = nts;
+  state.noteAuthors = auths;
+
+  saveLocalState();
+  updateCounts();
+  applyFilters();
+
+  if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
+    const active = state.filtered[state.currentModalIndex];
+    updateModalDecisionState(active);
+
+    const noteInput = document.getElementById('modal-note-input');
+    const noteAuthorEl = document.getElementById('modal-note-author');
+    if (noteInput && document.activeElement !== noteInput) {
+      noteInput.value = getCandidateNote(active);
+      const author = getCandidateNoteAuthor(active);
+      if (noteAuthorEl) noteAuthorEl.textContent = author && noteInput.value.trim() ? `(by ${author})` : '';
+    }
+  }
+}
+
+/**
+ * Candidate Responses are fetched directly from Google Sheets / local CSV (0 Firestore reads)
+ * Keeping this function as a no-op protects against wasting Firestore write/read quota.
  */
 async function saveCandidatesToFirestore(candidatesList) {
-  if (!candidatesList || candidatesList.length === 0) return;
-  try {
-    updateSyncIndicator('syncing', 'Syncing to Cloud…');
-    if (db) {
-      const CHUNK_SIZE = 400;
-      for (let i = 0; i < candidatesList.length; i += CHUNK_SIZE) {
-        const chunk = candidatesList.slice(i, i + CHUNK_SIZE);
-        const batch = db.batch();
-        chunk.forEach((c) => {
-          const key = getCandidateKey(c);
-          if (key) {
-            const docRef = db.collection('candidates').doc(key);
-            batch.set(docRef, {
-              ...c,
-              cloudSyncedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-          }
-        });
-        await batch.commit();
-      }
-    } else {
-      // Direct REST write fallback
-      for (const c of candidatesList) {
-        const key = getCandidateKey(c);
-        if (key) {
-          const fields = {};
-          for (const [k, v] of Object.entries(c)) {
-            if (typeof v === 'boolean') fields[k] = { booleanValue: v };
-            else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
-            else fields[k] = { stringValue: String(v || '') };
-          }
-          fields.cloudSyncedAt = { timestampValue: new Date().toISOString() };
-          await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/candidates/${key}?key=${firebaseConfig.apiKey}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fields })
-          });
-        }
-      }
-    }
-    updateSyncIndicator('synced', 'Live Cloud Sync');
-  } catch (err) {
-    console.warn('Error saving candidates to Firestore, fallback notice:', err);
-    updateSyncIndicator('synced', 'Live Cloud Sync');
-  }
+  return;
 }
 
 async function saveSheetUrlToFirestore(url) {
   if (!url) return;
-  const cleanUrl = url.trim();
-  if (db) {
-    try {
-      await db.collection('config').doc('google_sheet').set({
-        sheetUrl: cleanUrl,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedBy: state.reviewerName || 'Coordinator'
-      }, { merge: true });
-    } catch (err) {
-      console.warn('SDK sheet URL save notice:', err);
+  state.sheetUrl = url.trim();
+  saveLocalState();
+  syncStateToFirestore();
+}
+
+let syncDebounceTimer = null;
+function syncStateToFirestore(reviewerName) {
+  clearTimeout(syncDebounceTimer);
+  syncDebounceTimer = setTimeout(() => {
+    updateSyncIndicator('syncing', 'Syncing…');
+    const rev = reviewerName || state.reviewerName || 'Coordinator';
+
+    const payload = {
+      decisions: state.decisions || {},
+      reviewers: state.reviewers || {},
+      notes: state.notes || {},
+      noteAuthors: state.noteAuthors || {},
+      sheetUrl: state.sheetUrl || '',
+      updatedAt: (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore.FieldValue.serverTimestamp() : new Date().toISOString(),
+      updatedBy: rev
+    };
+
+    if (db) {
+      db.collection('sync_meta').doc('state').set(payload)
+        .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
+        .catch(err => {
+          console.warn('Firestore sync_meta write note:', err);
+          saveStateREST();
+        });
+    } else {
+      saveStateREST();
+    }
+  }, 80);
+}
+
+function objectToFirestoreMap(obj) {
+  const fields = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (v !== undefined && v !== null) {
+      fields[k] = { stringValue: String(v) };
     }
   }
-  // REST fallback
+  return { mapValue: { fields } };
+}
+
+async function saveStateREST() {
   try {
     const fields = {
-      sheetUrl: { stringValue: cleanUrl },
+      decisions: objectToFirestoreMap(state.decisions),
+      reviewers: objectToFirestoreMap(state.reviewers),
+      notes: objectToFirestoreMap(state.notes),
+      noteAuthors: objectToFirestoreMap(state.noteAuthors),
+      sheetUrl: { stringValue: state.sheetUrl || '' },
       updatedAt: { timestampValue: new Date().toISOString() },
       updatedBy: { stringValue: state.reviewerName || 'Coordinator' }
     };
-    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/config/google_sheet?key=${firebaseConfig.apiKey}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields })
-    });
-  } catch (restErr) {
-    console.warn('REST sheet URL save notice:', restErr);
-  }
-}
-
-async function saveDecisionREST(key, data) {
-  try {
-    const fields = {};
-    for (const [k, v] of Object.entries(data)) {
-      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
-      else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
-      else fields[k] = { stringValue: String(v || '') };
-    }
-    fields.updatedAt = { timestampValue: new Date().toISOString() };
-    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/decisions/${key}?key=${firebaseConfig.apiKey}`, {
+    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/sync_meta/state?key=${firebaseConfig.apiKey}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields })
     });
     updateSyncIndicator('synced', 'Live Cloud Sync');
-  } catch (err) {
-    console.warn('REST decision write notice:', err);
-  }
-}
-
-async function saveNoteREST(key, data) {
-  try {
-    const fields = {};
-    for (const [k, v] of Object.entries(data)) {
-      if (typeof v === 'boolean') fields[k] = { booleanValue: v };
-      else if (typeof v === 'number') fields[k] = { integerValue: String(v) };
-      else fields[k] = { stringValue: String(v || '') };
-    }
-    fields.noteUpdatedAt = { timestampValue: new Date().toISOString() };
-    await fetch(`https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents/decisions/${key}?key=${firebaseConfig.apiKey}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields })
-    });
-    updateSyncIndicator('synced', 'Live Cloud Sync');
-  } catch (err) {
-    console.warn('REST note write notice:', err);
+  } catch (e) {
+    console.warn('REST saveState notice:', e);
   }
 }
 
@@ -555,11 +463,11 @@ function saveLocalState() {
  */
 function getCandidateKey(c) {
   if (!c) return null;
-  if (c.rollNo && c.rollNo.trim()) {
+  if (c.rollNo && c.rollNo.toString().trim()) {
     const clean = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
     return `roll_${clean}`;
   }
-  if (c.email && c.email.trim()) {
+  if (c.email && c.email.toString().trim()) {
     const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
     return `email_${cleanEmail}`;
   }
@@ -571,11 +479,21 @@ function getCandidateDecision(c) {
   const key = getCandidateKey(c);
   if (key && state.decisions[key]) return state.decisions[key];
   if (c.rollNo) {
-    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
-    if (state.decisions[rollKey]) return state.decisions[rollKey];
+    const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.decisions[`roll_${cleanRoll}`]) return state.decisions[`roll_${cleanRoll}`];
+    if (state.decisions[c.rollNo]) return state.decisions[c.rollNo];
+    if (state.decisions[String(c.rollNo).trim()]) return state.decisions[String(c.rollNo).trim()];
   }
-  if (state.decisions[c.id]) return state.decisions[c.id];
-  if (state.decisions[String(c.id)]) return state.decisions[String(c.id)];
+  if (c.email) {
+    const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.decisions[`email_${cleanEmail}`]) return state.decisions[`email_${cleanEmail}`];
+    if (state.decisions[c.email]) return state.decisions[c.email];
+  }
+  if (c.id !== undefined && c.id !== null) {
+    if (state.decisions[c.id]) return state.decisions[c.id];
+    if (state.decisions[String(c.id)]) return state.decisions[String(c.id)];
+    if (state.decisions[`id_${c.id}`]) return state.decisions[`id_${c.id}`];
+  }
   return 'pending';
 }
 
@@ -584,11 +502,21 @@ function getCandidateReviewer(c) {
   const key = getCandidateKey(c);
   if (key && state.reviewers[key]) return state.reviewers[key];
   if (c.rollNo) {
-    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
-    if (state.reviewers[rollKey]) return state.reviewers[rollKey];
+    const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.reviewers[`roll_${cleanRoll}`]) return state.reviewers[`roll_${cleanRoll}`];
+    if (state.reviewers[c.rollNo]) return state.reviewers[c.rollNo];
+    if (state.reviewers[String(c.rollNo).trim()]) return state.reviewers[String(c.rollNo).trim()];
   }
-  if (state.reviewers[c.id]) return state.reviewers[c.id];
-  if (state.reviewers[String(c.id)]) return state.reviewers[String(c.id)];
+  if (c.email) {
+    const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.reviewers[`email_${cleanEmail}`]) return state.reviewers[`email_${cleanEmail}`];
+    if (state.reviewers[c.email]) return state.reviewers[c.email];
+  }
+  if (c.id !== undefined && c.id !== null) {
+    if (state.reviewers[c.id]) return state.reviewers[c.id];
+    if (state.reviewers[String(c.id)]) return state.reviewers[String(c.id)];
+    if (state.reviewers[`id_${c.id}`]) return state.reviewers[`id_${c.id}`];
+  }
   return '';
 }
 
@@ -597,11 +525,21 @@ function getCandidateNote(c) {
   const key = getCandidateKey(c);
   if (key && state.notes[key] !== undefined) return state.notes[key];
   if (c.rollNo) {
-    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
-    if (state.notes[rollKey] !== undefined) return state.notes[rollKey];
+    const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.notes[`roll_${cleanRoll}`] !== undefined) return state.notes[`roll_${cleanRoll}`];
+    if (state.notes[c.rollNo] !== undefined) return state.notes[c.rollNo];
+    if (state.notes[String(c.rollNo).trim()] !== undefined) return state.notes[String(c.rollNo).trim()];
   }
-  if (state.notes[c.id] !== undefined) return state.notes[c.id];
-  if (state.notes[String(c.id)] !== undefined) return state.notes[String(c.id)];
+  if (c.email) {
+    const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.notes[`email_${cleanEmail}`] !== undefined) return state.notes[`email_${cleanEmail}`];
+    if (state.notes[c.email] !== undefined) return state.notes[c.email];
+  }
+  if (c.id !== undefined && c.id !== null) {
+    if (state.notes[c.id] !== undefined) return state.notes[c.id];
+    if (state.notes[String(c.id)] !== undefined) return state.notes[String(c.id)];
+    if (state.notes[`id_${c.id}`] !== undefined) return state.notes[`id_${c.id}`];
+  }
   return '';
 }
 
@@ -610,11 +548,21 @@ function getCandidateNoteAuthor(c) {
   const key = getCandidateKey(c);
   if (key && state.noteAuthors[key]) return state.noteAuthors[key];
   if (c.rollNo) {
-    const rollKey = `roll_${c.rollNo.toString().trim().toLowerCase()}`;
-    if (state.noteAuthors[rollKey]) return state.noteAuthors[rollKey];
+    const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.noteAuthors[`roll_${cleanRoll}`]) return state.noteAuthors[`roll_${cleanRoll}`];
+    if (state.noteAuthors[c.rollNo]) return state.noteAuthors[c.rollNo];
+    if (state.noteAuthors[String(c.rollNo).trim()]) return state.noteAuthors[String(c.rollNo).trim()];
   }
-  if (state.noteAuthors[c.id]) return state.noteAuthors[c.id];
-  if (state.noteAuthors[String(c.id)]) return state.noteAuthors[String(c.id)];
+  if (c.email) {
+    const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    if (state.noteAuthors[`email_${cleanEmail}`]) return state.noteAuthors[`email_${cleanEmail}`];
+    if (state.noteAuthors[c.email]) return state.noteAuthors[c.email];
+  }
+  if (c.id !== undefined && c.id !== null) {
+    if (state.noteAuthors[c.id]) return state.noteAuthors[c.id];
+    if (state.noteAuthors[String(c.id)]) return state.noteAuthors[String(c.id)];
+    if (state.noteAuthors[`id_${c.id}`]) return state.noteAuthors[`id_${c.id}`];
+  }
   return '';
 }
 
@@ -623,93 +571,110 @@ function getCandidateNoteAuthor(c) {
  * Synchronizes to Cloud Firestore and mirrors to local cache
  */
 async function setCandidateDecision(candidateId, decision) {
-  candidateId = Number(candidateId);
-  const c = state.candidates.find(item => Number(item.id) === candidateId) || state.filtered.find(item => Number(item.id) === candidateId);
+  const c = state.candidates.find(item => String(item.id) === String(candidateId) || (item.rollNo && String(item.rollNo) === String(candidateId)))
+         || state.filtered.find(item => String(item.id) === String(candidateId) || (item.rollNo && String(item.rollNo) === String(candidateId)));
   if (!c) return;
 
   const key = getCandidateKey(c);
   const current = getCandidateDecision(c);
   const reviewer = (state.reviewerName || 'Reviewer').trim();
+  const nextDecision = (current === decision) ? 'pending' : decision;
 
-  if (current === decision) {
-    // Toggle off back to pending
-    delete state.decisions[key];
+  function clearCandidateDecisions() {
+    if (key) {
+      delete state.decisions[key];
+      delete state.reviewers[key];
+    }
     delete state.decisions[candidateId];
     delete state.decisions[String(candidateId)];
-    delete state.reviewers[key];
+    delete state.decisions[`id_${candidateId}`];
     delete state.reviewers[candidateId];
-
-    showToast('Decision cleared (Pending)');
-    saveLocalState();
-    updateCounts();
-    applyFilters();
-
-    const clearPayload = {
-      decision: 'pending',
-      reviewer: '',
-      candidateId: candidateId,
-      name: c.name || '',
-      rollNo: c.rollNo || ''
-    };
-
-    if (db) {
-      updateSyncIndicator('syncing', 'Syncing…');
-      db.collection('decisions').doc(key).set({
-        ...clearPayload,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true })
-        .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
-        .catch(err => {
-          console.warn('Firestore decision update notice, using REST fallback:', err);
-          saveDecisionREST(key, clearPayload);
-        });
-    } else {
-      saveDecisionREST(key, clearPayload);
+    delete state.reviewers[String(candidateId)];
+    delete state.reviewers[`id_${candidateId}`];
+    if (c.id !== undefined && c.id !== null) {
+      delete state.decisions[c.id];
+      delete state.decisions[String(c.id)];
+      delete state.decisions[`id_${c.id}`];
+      delete state.reviewers[c.id];
+      delete state.reviewers[String(c.id)];
+      delete state.reviewers[`id_${c.id}`];
     }
-  } else {
-    state.decisions[key] = decision;
-    state.decisions[candidateId] = decision;
-    state.reviewers[key] = reviewer;
-    state.reviewers[candidateId] = reviewer;
-
-    showToast(decision === 'selected' ? `Selected by ${reviewer} ✓` : `Rejected by ${reviewer} ✕`);
-    saveLocalState();
-    updateCounts();
-    applyFilters();
-
-    const selectPayload = {
-      decision: decision,
-      reviewer: reviewer,
-      candidateId: candidateId,
-      name: c.name || '',
-      rollNo: c.rollNo || '',
-      branch: c.branch || '',
-      year: c.year || ''
-    };
-
-    if (db) {
-      updateSyncIndicator('syncing', 'Syncing…');
-      db.collection('decisions').doc(key).set({
-        ...selectPayload,
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true })
-        .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
-        .catch(err => {
-          console.warn('Firestore save notice, using REST fallback:', err);
-          saveDecisionREST(key, selectPayload);
-        });
-    } else {
-      saveDecisionREST(key, selectPayload);
+    if (c.rollNo) {
+      const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      delete state.decisions[`roll_${cleanRoll}`];
+      delete state.decisions[c.rollNo];
+      delete state.decisions[String(c.rollNo).trim()];
+      delete state.reviewers[`roll_${cleanRoll}`];
+      delete state.reviewers[c.rollNo];
+      delete state.reviewers[String(c.rollNo).trim()];
+    }
+    if (c.email) {
+      const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      delete state.decisions[`email_${cleanEmail}`];
+      delete state.decisions[c.email];
+      delete state.reviewers[`email_${cleanEmail}`];
+      delete state.reviewers[c.email];
     }
   }
 
-  // If modal is currently viewing this candidate, update its UI
+  function applyCandidateDecisions(dec, rev) {
+    if (key) {
+      state.decisions[key] = dec;
+      state.reviewers[key] = rev;
+    }
+    state.decisions[candidateId] = dec;
+    state.decisions[String(candidateId)] = dec;
+    state.decisions[`id_${candidateId}`] = dec;
+    state.reviewers[candidateId] = rev;
+    state.reviewers[String(candidateId)] = rev;
+    state.reviewers[`id_${candidateId}`] = rev;
+    if (c.id !== undefined && c.id !== null) {
+      state.decisions[c.id] = dec;
+      state.decisions[String(c.id)] = dec;
+      state.decisions[`id_${c.id}`] = dec;
+      state.reviewers[c.id] = rev;
+      state.reviewers[String(c.id)] = rev;
+      state.reviewers[`id_${c.id}`] = rev;
+    }
+    if (c.rollNo) {
+      const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      state.decisions[`roll_${cleanRoll}`] = dec;
+      state.decisions[c.rollNo] = dec;
+      state.decisions[String(c.rollNo).trim()] = dec;
+      state.reviewers[`roll_${cleanRoll}`] = rev;
+      state.reviewers[c.rollNo] = rev;
+      state.reviewers[String(c.rollNo).trim()] = rev;
+    }
+    if (c.email) {
+      const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      state.decisions[`email_${cleanEmail}`] = dec;
+      state.decisions[c.email] = dec;
+      state.reviewers[`email_${cleanEmail}`] = rev;
+      state.reviewers[c.email] = rev;
+    }
+  }
+
+  if (nextDecision === 'pending') {
+    clearCandidateDecisions();
+    showToast('Decision cleared (Pending)');
+  } else {
+    applyCandidateDecisions(nextDecision, reviewer);
+    showToast(nextDecision === 'selected' ? `Selected by ${reviewer} ✓` : `Rejected by ${reviewer} ✕`);
+  }
+
+  saveLocalState();
+  updateCounts();
+  applyFilters();
+
   if (state.currentModalIndex >= 0 && state.filtered[state.currentModalIndex]) {
     const active = state.filtered[state.currentModalIndex];
-    if (Number(active.id) === candidateId) {
+    if (String(active.id) === String(candidateId) || (active.rollNo && active.rollNo === c.rollNo)) {
       updateModalDecisionState(active);
     }
   }
+
+  // Persist state in 1 document (1 write!)
+  syncStateToFirestore(reviewer);
 }
 
 /**
@@ -734,19 +699,75 @@ function handleNoteInput(candidateId, noteText) {
 
 async function saveCandidateNote(candidateId, noteText) {
   clearTimeout(noteDebounceTimer);
-  candidateId = Number(candidateId);
-  const c = state.candidates.find(item => Number(item.id) === candidateId) || state.filtered.find(item => Number(item.id) === candidateId);
+  const c = state.candidates.find(item => String(item.id) === String(candidateId) || (item.rollNo && String(item.rollNo) === String(candidateId)))
+         || state.filtered.find(item => String(item.id) === String(candidateId) || (item.rollNo && String(item.rollNo) === String(candidateId)));
   if (!c) return;
 
   const key = getCandidateKey(c);
   const reviewer = (state.reviewerName || 'Reviewer').trim();
 
-  state.notes[key] = noteText;
-  state.notes[candidateId] = noteText;
-  if (noteText.trim()) {
-    state.noteAuthors[key] = reviewer;
-    state.noteAuthors[candidateId] = reviewer;
+  function applyCandidateNotes(text, author) {
+    if (key) {
+      state.notes[key] = text;
+      if (author) state.noteAuthors[key] = author;
+      else delete state.noteAuthors[key];
+    }
+    state.notes[candidateId] = text;
+    state.notes[String(candidateId)] = text;
+    state.notes[`id_${candidateId}`] = text;
+    if (author) {
+      state.noteAuthors[candidateId] = author;
+      state.noteAuthors[String(candidateId)] = author;
+      state.noteAuthors[`id_${candidateId}`] = author;
+    } else {
+      delete state.noteAuthors[candidateId];
+      delete state.noteAuthors[String(candidateId)];
+      delete state.noteAuthors[`id_${candidateId}`];
+    }
+    if (c.id !== undefined && c.id !== null) {
+      state.notes[c.id] = text;
+      state.notes[String(c.id)] = text;
+      state.notes[`id_${c.id}`] = text;
+      if (author) {
+        state.noteAuthors[c.id] = author;
+        state.noteAuthors[String(c.id)] = author;
+        state.noteAuthors[`id_${c.id}`] = author;
+      } else {
+        delete state.noteAuthors[c.id];
+        delete state.noteAuthors[String(c.id)];
+        delete state.noteAuthors[`id_${c.id}`];
+      }
+    }
+    if (c.rollNo) {
+      const cleanRoll = c.rollNo.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      state.notes[`roll_${cleanRoll}`] = text;
+      state.notes[c.rollNo] = text;
+      state.notes[String(c.rollNo).trim()] = text;
+      if (author) {
+        state.noteAuthors[`roll_${cleanRoll}`] = author;
+        state.noteAuthors[c.rollNo] = author;
+        state.noteAuthors[String(c.rollNo).trim()] = author;
+      } else {
+        delete state.noteAuthors[`roll_${cleanRoll}`];
+        delete state.noteAuthors[c.rollNo];
+        delete state.noteAuthors[String(c.rollNo).trim()];
+      }
+    }
+    if (c.email) {
+      const cleanEmail = c.email.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      state.notes[`email_${cleanEmail}`] = text;
+      state.notes[c.email] = text;
+      if (author) {
+        state.noteAuthors[`email_${cleanEmail}`] = author;
+        state.noteAuthors[c.email] = author;
+      } else {
+        delete state.noteAuthors[`email_${cleanEmail}`];
+        delete state.noteAuthors[c.email];
+      }
+    }
   }
+
+  applyCandidateNotes(noteText, noteText.trim() ? reviewer : '');
 
   saveLocalState();
   applyFilters(); // Updates note preview on candidate tile
@@ -761,30 +782,8 @@ async function saveCandidateNote(candidateId, noteText) {
     authorEl.textContent = noteText.trim() ? `(by ${reviewer})` : '';
   }
 
-  const notePayload = {
-    note: noteText,
-    noteAuthor: noteText.trim() ? reviewer : '',
-    candidateId: candidateId,
-    name: c.name || '',
-    rollNo: c.rollNo || '',
-    branch: c.branch || '',
-    year: c.year || ''
-  };
-
-  if (db) {
-    updateSyncIndicator('syncing', 'Syncing note…');
-    db.collection('decisions').doc(key).set({
-      ...notePayload,
-      noteUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true })
-      .then(() => updateSyncIndicator('synced', 'Live Cloud Sync'))
-      .catch(err => {
-        console.warn('Firestore note save notice, using REST fallback:', err);
-        saveNoteREST(key, notePayload);
-      });
-  } else {
-    saveNoteREST(key, notePayload);
-  }
+  // Consolidate sync in 1 document
+  syncStateToFirestore(reviewer);
 }
 
 /**
@@ -882,18 +881,38 @@ function closeSheetModal() {
  * Guarantees zero blank screen / zero initial entries on all devices
  * --------------------------------------------------------------------------
  */
+function parseFirestoreValue(v) {
+  if (!v) return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return Number(v.doubleValue);
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('nullValue' in v) return null;
+  if ('mapValue' in v) {
+    const res = {};
+    if (v.mapValue && v.mapValue.fields) {
+      for (const [mk, mv] of Object.entries(v.mapValue.fields)) {
+        res[mk] = parseFirestoreValue(mv);
+      }
+    }
+    return res;
+  }
+  if ('arrayValue' in v) {
+    if (v.arrayValue && Array.isArray(v.arrayValue.values)) {
+      return v.arrayValue.values.map(parseFirestoreValue);
+    }
+    return [];
+  }
+  return '';
+}
+
 function parseFirestoreDoc(doc) {
   if (!doc || !doc.fields) return null;
   const idFromPath = doc.name ? doc.name.split('/').pop() : '';
   const result = { id: idFromPath };
   for (const [k, v] of Object.entries(doc.fields)) {
-    if ('stringValue' in v) result[k] = v.stringValue;
-    else if ('integerValue' in v) result[k] = Number(v.integerValue);
-    else if ('doubleValue' in v) result[k] = Number(v.doubleValue);
-    else if ('booleanValue' in v) result[k] = v.booleanValue;
-    else if ('timestampValue' in v) result[k] = v.timestampValue;
-    else if ('nullValue' in v) result[k] = null;
-    else result[k] = '';
+    result[k] = parseFirestoreValue(v);
   }
   return result;
 }
@@ -903,24 +922,21 @@ async function fastFetchAllData() {
   const projectId = firebaseConfig.projectId;
 
   try {
-    // 1. Fetch Candidates from Firestore REST API
-    const candPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/candidates?pageSize=300&key=${apiKey}`)
+    // 1. Consolidated state fetch: Decisions, Reviewers, Notes, Sheet URL (1 single document read!)
+    const statePromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sync_meta/state?key=${apiKey}`)
       .then(res => res.json())
       .then(data => {
-        if (data && Array.isArray(data.documents) && data.documents.length > 0) {
-          const list = data.documents.map(parseFirestoreDoc).filter(c => c && c.name);
-          if (list.length > 0) {
-            list.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-            state.excelCandidates = list;
-            mergeCandidates();
-            updateSyncIndicator('synced', 'Live Cloud Sync');
+        if (data && data.fields) {
+          const doc = parseFirestoreDoc(data);
+          if (doc) {
+            extractSyncedState(doc);
           }
         }
       })
-      .catch(e => console.warn('Fast cand fetch notice:', e));
+      .catch(e => console.warn('Fast state fetch notice:', e));
 
-    // 2. Fetch Walk-ins from Firestore REST API
-    const walkinPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/walkin_responses?pageSize=100&key=${apiKey}`)
+    // 2. Fetch Walk-ins from Firestore REST API (walk-ins only, e.g. 50 max)
+    const walkinPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/walkin_responses?pageSize=50&key=${apiKey}`)
       .then(res => res.json())
       .then(data => {
         if (data && Array.isArray(data.documents) && data.documents.length > 0) {
@@ -936,57 +952,9 @@ async function fastFetchAllData() {
       })
       .catch(e => console.warn('Fast walkin fetch notice:', e));
 
-    // 3. Fetch Decisions & Notes from Firestore REST API
-    const decPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/decisions?pageSize=300&key=${apiKey}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && Array.isArray(data.documents) && data.documents.length > 0) {
-          data.documents.forEach(doc => {
-            const p = parseFirestoreDoc(doc);
-            if (p && p.id) {
-              const key = p.id;
-              if (p.decision) {
-                state.decisions[key] = p.decision;
-                if (p.candidateId) state.decisions[p.candidateId] = p.decision;
-              }
-              if (p.reviewer) {
-                state.reviewers[key] = p.reviewer;
-                if (p.candidateId) state.reviewers[p.candidateId] = p.reviewer;
-              }
-              if (p.note !== undefined) {
-                state.notes[key] = p.note;
-                if (p.candidateId) state.notes[p.candidateId] = p.note;
-              }
-              if (p.noteAuthor) {
-                state.noteAuthors[key] = p.noteAuthor;
-                if (p.candidateId) state.noteAuthors[p.candidateId] = p.noteAuthor;
-              }
-            }
-          });
-          saveLocalState();
-          updateCounts();
-          applyFilters();
-        }
-      })
-      .catch(e => console.warn('Fast dec fetch notice:', e));
+    await Promise.allSettled([statePromise, walkinPromise]);
 
-    // 4. Fetch Google Sheet config URL from Firestore REST
-    const configPromise = fetch(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/config/google_sheet?key=${apiKey}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.fields && data.fields.sheetUrl && data.fields.sheetUrl.stringValue) {
-          const url = data.fields.sheetUrl.stringValue.trim();
-          if (url && url !== state.sheetUrl) {
-            state.sheetUrl = url;
-            saveLocalState();
-          }
-        }
-      })
-      .catch(e => console.warn('Fast config fetch notice:', e));
-
-    await Promise.allSettled([candPromise, walkinPromise, decPromise, configPromise]);
-
-    // If candidate list was still empty for any reason, fetch live sheet directly
+    // 3. If candidate list is empty, fetch live sheet directly from Google Sheet CSV (0 Firestore reads)
     if (state.excelCandidates.length === 0) {
       await syncGoogleSheetResponses(false, true);
     }
@@ -1023,26 +991,28 @@ function initData() {
   // 2. Immediate cloud load via fast REST path
   fastFetchAllData();
 
-  // 3. Keep all devices in sync even if background tabs sleep
+  // 3. Keep devices in sync on tab focus/wake
   startCloudBackgroundSync();
 }
 
 /**
- * Periodic background cloud sync (every 12 seconds + on tab visibility change)
- * Ensures 100% data freshness across mobile phones and desktop tabs
+ * Cloud background sync handler (visibilitychange on device wake + gentle 5-minute safety sync)
+ * Removes continuous 12-second polling to strictly preserve Firestore free tier quota
  */
 let bgSyncInterval = null;
 function startCloudBackgroundSync() {
   if (bgSyncInterval) clearInterval(bgSyncInterval);
-  bgSyncInterval = setInterval(() => {
-    fastFetchAllData();
-  }, 12000);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       fastFetchAllData();
     }
   });
+
+  // Gentle safety sync every 5 minutes (300,000 ms) in case of mobile sleep
+  bgSyncInterval = setInterval(() => {
+    fastFetchAllData();
+  }, 300000);
 }
 
 /**
@@ -1866,18 +1836,23 @@ function bindEvents() {
         if (authorEl) authorEl.textContent = '';
       }
 
+      // Sync cleared state to sync_meta/state document (1 write!)
+      syncStateToFirestore('System Reset');
+
       if (db) {
         try {
           const snapshot = await db.collection('decisions').get();
-          const batch = db.batch();
-          snapshot.forEach(doc => batch.delete(doc.ref));
-          await batch.commit();
+          if (!snapshot.empty) {
+            const batch = db.batch();
+            snapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+          }
           updateSyncIndicator('synced', 'Live Cloud Sync');
           showToast('All candidate decisions and notes reset across cloud');
         } catch (err) {
-          console.error('Reset error:', err);
-          updateSyncIndicator('error', 'Reset failed on Cloud');
-          showToast('Failed to reset cloud records');
+          console.warn('Reset decisions notice:', err);
+          updateSyncIndicator('synced', 'Live Cloud Sync');
+          showToast('All candidate decisions and notes reset');
         }
       } else {
         showToast('All decisions reset locally');

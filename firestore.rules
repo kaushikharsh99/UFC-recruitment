@@ -1,3 +1,4 @@
+// UFC FOSS Recruitment Rules 2026 - Live Sync
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {

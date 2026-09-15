@@ -75,8 +75,8 @@ app.post('/api/register', (req, res) => {
 
     // Also mirror to Firebase Cloud Firestore via REST
     try {
-      const apiKey = 'AIzaSyAjV2EkLn-qp3WW_gTUj_cFR8Eqc8h7SIY';
-      const projectId = 'ufc-recruitment-2026';
+      const apiKey = 'AIzaSyAmYv7uMn6hArUvTYN2i8jq8KK68s_dHzQ';
+      const projectId = 'ufc-recruitment-live';
       const fields = {};
       for (const [k, v] of Object.entries(newEntry)) {
         if (typeof v === 'boolean') fields[k] = { booleanValue: v };
